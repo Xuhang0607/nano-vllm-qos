@@ -96,15 +96,15 @@ Mooncake、RDMA 或 GPU 性能数据。
 2. ModelRunner Rank-Local Tensor Page 打包与恢复；
 3. Remote Prefix Cost Model 与 `WAITING_FOR_KV` 调度状态；
 4. 后台 GET、重复请求合并、取消隔离和失败回退；
-5. 主线程 GPU Import、BlockManager 原子注册与 Scheduler 唤醒。
+5. 主线程 GPU Import、BlockManager 原子注册与 Scheduler 唤醒；
+6. 新完成 Page 的主线程导出、后台 PUT、写入合并与 Remote Catalog 原子发布。
 
 当前仍不能声称“完成 nano-vLLM + Mooncake 分布式推理”。仍需：
 
-1. Prefill 完成后的自动异步 Write-Back；
-2. Remote Prefix Catalog 持久化和多实例一致性；
-3. TP>1 Shard 恢复与跨 Rank 同步；
-4. 独立 CUDA Stream/Event 和注册内存零拷贝路径；
-5. 真实 Mooncake 进程端到端性能验证。
+1. Remote Prefix Catalog 持久化和多实例一致性；
+2. TP>1 Shard 恢复与跨 Rank 同步；
+3. 独立 CUDA Stream/Event 和注册内存零拷贝路径；
+4. 真实 Mooncake 进程端到端性能验证。
 
 官方 Mooncake 建议先在 Ubuntu 使用 TCP 完成正确性验证，再在具备 RDMA/GPUDirect
 条件的节点测试零拷贝路径。仓库提供 `python -m scripts.mooncake_smoke` 做第一步。

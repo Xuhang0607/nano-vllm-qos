@@ -211,11 +211,11 @@ python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 4. Async Coordinator 与存储 Backend 的 Page 对象桥接。
 5. `ModelRunner` Rank-Local 导出/导入入口。
 6. TP=1 下的 `WAITING_FOR_KV`、后台 Fetch、主线程 Import、BlockManager 原子注册与唤醒。
+7. TP=1 下新完成 Page 的安全点导出、后台写入与 Catalog 原子发布。
 
 仍需完成：
 
-1. 自动写回触发策略以及 Block Refcount、Eviction 与 Transfer 生命周期联动。
-2. Remote Prefix Catalog 持久化与服务重启重建。
-3. Tensor Parallel 下每个 Rank 独立读写自己的 Shard，并进行跨 Rank 完成同步。
-4. 使用独立 CUDA Stream 与 Event 实现传输/计算重叠。
-5. 接入真实 Mooncake 进程并测量 TTFT、带宽与 Crossover Point。
+1. Remote Prefix Catalog 持久化与服务重启重建。
+2. Tensor Parallel 下每个 Rank 独立读写自己的 Shard，并进行跨 Rank 完成同步。
+3. 使用独立 CUDA Stream 与 Event 实现传输/计算重叠。
+4. 接入真实 Mooncake 进程并测量 TTFT、带宽与 Crossover Point。

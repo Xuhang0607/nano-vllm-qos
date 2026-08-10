@@ -1,4 +1,5 @@
 import atexit
+from collections import deque
 from dataclasses import fields
 from time import perf_counter
 
@@ -19,6 +20,7 @@ from nanovllm.engine.remote_restore import (
     RemoteKVRestoreService,
     RemotePageDescriptor,
     RemotePrefixCatalog,
+    completed_kv_page_span,
 )
 from nanovllm.engine.scheduler import Scheduler
 from nanovllm.engine.sequence import Sequence
@@ -98,6 +100,8 @@ class LLMEngine:
             remote_restore_service=self.remote_restore_service,
         )
         self.config = config
+        self.pending_remote_writebacks = []
+        self.remote_writeback_errors = deque(maxlen=128)
         self._exited = False
         atexit.register(self.exit)
 
@@ -105,27 +109,24 @@ class LLMEngine:
         if self._exited:
             return
         self._exited = True
-        if self.remote_restore_service is not None:
-            self.remote_restore_service.close()
-        self.model_runner.call("exit")
-        del self.model_runner
-        for p in self.ps:
-            p.join()
+        try:
+            if self.remote_restore_service is not None:
+                self._process_remote_writebacks(wait=True)
+                self.remote_restore_service.close()
+        finally:
+            self.model_runner.call("exit")
+            del self.model_runner
+            for p in self.ps:
+                p.join()
 
-    def register_remote_prefix(self, token_ids, envelopes, timeout=None):
-        if self.remote_restore_service is None:
-            raise RuntimeError("LLMEngine was created without kv_storage_backend")
+    def _describe_remote_prefix(self, token_ids, num_pages):
         block_size = self.config.kvcache_block_size
-        envelopes = tuple(envelopes)
-        if not envelopes:
-            raise ValueError("at least one remote KV page is required")
-        required_tokens = len(envelopes) * block_size
-        if len(token_ids) < required_tokens:
-            raise ValueError("token_ids do not contain every published KV page")
-
+        required_tokens = num_pages * block_size
+        if num_pages <= 0 or len(token_ids) < required_tokens:
+            raise ValueError("token_ids do not contain every remote KV page")
         block_keys = tuple(
             tuple(token_ids[index * block_size:(index + 1) * block_size])
-            for index in range(len(envelopes))
+            for index in range(num_pages)
         )
         descriptors = tuple(
             RemotePageDescriptor(
@@ -139,7 +140,19 @@ class LLMEngine:
                 tp_rank=0,
                 page_index=index,
             )
-            for index in range(len(envelopes))
+            for index in range(num_pages)
+        )
+        return block_keys, descriptors
+
+    def register_remote_prefix(self, token_ids, envelopes, timeout=None):
+        if self.remote_restore_service is None:
+            raise RuntimeError("LLMEngine was created without kv_storage_backend")
+        envelopes = tuple(envelopes)
+        if not envelopes:
+            raise ValueError("at least one remote KV page is required")
+        block_keys, descriptors = self._describe_remote_prefix(
+            token_ids,
+            len(envelopes),
         )
         self.remote_restore_service.publish_prefix(
             block_keys,
@@ -148,6 +161,73 @@ class LLMEngine:
             timeout=timeout,
         )
         return descriptors
+
+    def _enqueue_remote_writebacks(self, seqs):
+        service = self.remote_restore_service
+        if service is None or not self.config.remote_kv_writeback:
+            return
+
+        block_size = self.config.kvcache_block_size
+        for seq in seqs:
+            previous_pages, completed_pages = completed_kv_page_span(
+                seq.num_cached_tokens,
+                seq.num_scheduled_tokens,
+                block_size,
+            )
+            if (
+                completed_pages == previous_pages
+                or completed_pages < self.config.remote_kv_min_prefix_blocks
+            ):
+                continue
+            try:
+                block_keys, descriptors = self._describe_remote_prefix(
+                    seq.token_ids,
+                    completed_pages,
+                )
+                required = service.pages_requiring_write(
+                    block_keys,
+                    descriptors,
+                )
+                envelopes = {
+                    index: self.model_runner.call(
+                        "export_kv_page",
+                        seq.block_table[index],
+                        self.kv_cache_identity.digest,
+                        index,
+                    )
+                    for index in required
+                }
+                pending = service.submit_writeback(
+                    block_keys,
+                    descriptors,
+                    envelopes,
+                )
+                if pending is not None:
+                    self.pending_remote_writebacks.append(pending)
+            except Exception as exc:  # noqa: BLE001 - cache writes must not fail inference
+                service.record_writeback_export_failure()
+                self.remote_writeback_errors.append(
+                    f"{type(exc).__name__}: {exc}"
+                )
+
+    def _process_remote_writebacks(self, wait=False):
+        if self.remote_restore_service is None:
+            return
+        for pending in tuple(self.pending_remote_writebacks):
+            if not wait and not pending.done:
+                continue
+            try:
+                self.remote_restore_service.complete_writeback(
+                    pending,
+                    timeout=10 if wait else None,
+                )
+            except Exception as exc:  # noqa: BLE001 - cache writes must not fail inference
+                self.remote_restore_service.fail_writeback(pending)
+                self.remote_writeback_errors.append(
+                    f"{type(exc).__name__}: {exc}"
+                )
+            finally:
+                self.pending_remote_writebacks.remove(pending)
 
     def _process_ready_remote_restores(self):
         for state in self.scheduler.ready_remote_restores():
@@ -183,6 +263,7 @@ class LLMEngine:
 
     def step(self):
         while True:
+            self._process_remote_writebacks()
             self._process_ready_remote_restores()
             seqs, is_prefill = self.scheduler.schedule()
             if seqs:
@@ -199,7 +280,9 @@ class LLMEngine:
         elapsed_ms = (perf_counter() - started) * 1000.0
         observed_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else len(seqs)
         self.scheduler.observe_execution(is_prefill, observed_tokens, elapsed_ms)
+        self._enqueue_remote_writebacks(seqs)
         self.scheduler.postprocess(seqs, token_ids, is_prefill)
+        self._process_remote_writebacks()
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         return outputs, num_tokens
 

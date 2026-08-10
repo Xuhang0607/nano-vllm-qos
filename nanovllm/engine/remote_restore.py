@@ -85,6 +85,50 @@ class PendingRemoteRestore:
             future.cancel()
 
 
+@dataclass(slots=True)
+class PendingRemoteWriteback:
+    block_keys: tuple[BlockKey, ...]
+    pages: tuple[RemotePageDescriptor, ...]
+    write_pages: tuple[RemotePageDescriptor, ...]
+    futures: tuple[Future, ...]
+
+    def __post_init__(self):
+        if not self.block_keys or len(self.block_keys) != len(self.pages):
+            raise ValueError("write-back prefix vectors must have the same non-zero length")
+        if not self.futures or len(self.write_pages) != len(self.futures):
+            raise ValueError("write-back pages and futures must have the same non-zero length")
+
+    @property
+    def done(self):
+        for future in self.futures:
+            if not future.done():
+                continue
+            if future.cancelled() or future.exception() is not None:
+                return True
+        return all(future.done() for future in self.futures)
+
+    def result(self, timeout=None):
+        # Surface a completed failure before waiting on unrelated slow pages.
+        for future in self.futures:
+            if future.done():
+                future.result()
+        for future in self.futures:
+            future.result(timeout=timeout)
+
+
+def completed_kv_page_span(
+    num_cached_tokens: int,
+    num_scheduled_tokens: int,
+    block_size: int,
+) -> tuple[int, int]:
+    """Return the half-open range of pages completed by the latest model run."""
+    if num_cached_tokens < 0 or num_scheduled_tokens < 0 or block_size <= 0:
+        raise ValueError("token counts must be non-negative and block_size positive")
+    start = num_cached_tokens // block_size
+    end = (num_cached_tokens + num_scheduled_tokens) // block_size
+    return start, end
+
+
 class RemotePrefixCatalog:
     """Map page-aligned token prefixes to remote object descriptors."""
 
@@ -152,6 +196,15 @@ class RemoteKVRestoreService:
             daemon=True,
         )
         self._closed = False
+        self._inflight_writes: dict[str, Future] = {}
+        self._writeback_metrics = {
+            "writeback_submitted": 0,
+            "writeback_completed": 0,
+            "writeback_failed": 0,
+            "writeback_export_failed": 0,
+            "writeback_pages": 0,
+            "writeback_coalesced_pages": 0,
+        }
         self._thread.start()
         if not self._ready.wait(timeout=5):
             raise RuntimeError("remote KV restore event loop did not start")
@@ -186,6 +239,94 @@ class RemoteKVRestoreService:
 
     def register_existing_prefix(self, block_keys, descriptors):
         self.catalog.register(block_keys, descriptors)
+
+    def pages_requiring_write(self, block_keys, descriptors) -> tuple[int, ...]:
+        block_keys = tuple(block_keys)
+        descriptors = tuple(descriptors)
+        if not block_keys or len(block_keys) != len(descriptors):
+            raise ValueError("write-back prefix vectors must have the same non-zero length")
+
+        published_pages = self.catalog.match(block_keys)
+        required = []
+        for index, descriptor in enumerate(descriptors):
+            if index < len(published_pages):
+                continue
+            future = self._inflight_writes.get(descriptor.object_key)
+            if future is not None and (
+                future.cancelled()
+                or (future.done() and future.exception() is not None)
+            ):
+                self._inflight_writes.pop(descriptor.object_key, None)
+                future = None
+            if future is None:
+                required.append(index)
+        return tuple(required)
+
+    def submit_writeback(
+        self,
+        block_keys,
+        descriptors,
+        envelopes_by_index,
+    ) -> PendingRemoteWriteback | None:
+        block_keys = tuple(block_keys)
+        descriptors = tuple(descriptors)
+        if not block_keys or len(block_keys) != len(descriptors):
+            raise ValueError("write-back prefix vectors must have the same non-zero length")
+
+        published_pages = self.catalog.match(block_keys)
+        write_plan = []
+        for index, descriptor in enumerate(descriptors):
+            if index < len(published_pages):
+                continue
+            future = self._inflight_writes.get(descriptor.object_key)
+            if future is None and index not in envelopes_by_index:
+                raise ValueError(f"missing exported KV page {index} for write-back")
+            write_plan.append((index, descriptor, future))
+
+        if not write_plan:
+            return None
+
+        write_pages = []
+        futures = []
+        for index, descriptor, future in write_plan:
+            if future is None:
+                future = self._submit(
+                    self._coordinator.put(
+                        descriptor.object_key,
+                        envelopes_by_index[index],
+                    )
+                )
+                self._inflight_writes[descriptor.object_key] = future
+                self._writeback_metrics["writeback_pages"] += 1
+            else:
+                self._writeback_metrics["writeback_coalesced_pages"] += 1
+            write_pages.append(descriptor)
+            futures.append(future)
+
+        self._writeback_metrics["writeback_submitted"] += 1
+        return PendingRemoteWriteback(
+            block_keys=block_keys,
+            pages=descriptors,
+            write_pages=tuple(write_pages),
+            futures=tuple(futures),
+        )
+
+    def complete_writeback(self, pending: PendingRemoteWriteback, timeout=None):
+        pending.result(timeout=timeout)
+        self.catalog.register(pending.block_keys, pending.pages)
+        for page, future in zip(pending.write_pages, pending.futures):
+            if self._inflight_writes.get(page.object_key) is future:
+                self._inflight_writes.pop(page.object_key, None)
+        self._writeback_metrics["writeback_completed"] += 1
+
+    def fail_writeback(self, pending: PendingRemoteWriteback):
+        for page, future in zip(pending.write_pages, pending.futures):
+            if self._inflight_writes.get(page.object_key) is future:
+                self._inflight_writes.pop(page.object_key, None)
+        self._writeback_metrics["writeback_failed"] += 1
+
+    def record_writeback_export_failure(self):
+        self._writeback_metrics["writeback_export_failed"] += 1
 
     def plan_restore(
         self,
@@ -245,7 +386,7 @@ class RemoteKVRestoreService:
         wait(futures, timeout=timeout, return_when=FIRST_COMPLETED)
 
     def metrics(self):
-        return self._coordinator.metrics()
+        return self._coordinator.metrics() | self._writeback_metrics.copy()
 
     def close(self):
         if self._closed:
@@ -260,6 +401,7 @@ class RemoteKVRestoreService:
         self._thread.join(timeout=10)
         if self._thread.is_alive():
             raise RuntimeError("remote KV restore event loop did not stop")
+        self._inflight_writes.clear()
 
     def __enter__(self):
         return self

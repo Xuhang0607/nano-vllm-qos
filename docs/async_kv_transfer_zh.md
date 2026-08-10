@@ -125,10 +125,11 @@ request B waiting ------^
 当前实现解决的是 Remote KV 对象操作的控制面并发问题。真实 Physical Page 的打包、稳定
 Envelope 与同步 GPU/CPU 恢复原语已经在 `kv_page.py` 中实现，详见
 [KV Page 数据面设计](kv_page_data_plane_zh.md)。TP=1 自动调度闭环也已实现，详见
-[Remote Restore 与 Scheduler 唤醒](remote_restore_scheduler_zh.md)。仍未完成的是：
+[Remote Restore 与 Scheduler 唤醒](remote_restore_scheduler_zh.md)。自动 Write-Back 已接入，
+详见[自动 Remote Write-Back 设计](remote_writeback_zh.md)。仍未完成的是：
 
 1. 使用独立 CUDA Stream 和 Event 让 CPU/GPU 拷贝与模型计算重叠。
-2. 自动 Write-Back 与 Remote Prefix Catalog 持久化重建。
+2. Remote Prefix Catalog 持久化重建。
 3. 完整的用户请求取消 API 以及 Finished/Cancelled 指标语义。
 4. Tensor Parallel 下让每个 Rank 读写各自的 KV Shard，并同步完成状态。
 

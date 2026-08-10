@@ -207,10 +207,10 @@ Remote I/O 级：
 
 ## 9. 当前边界
 
-本阶段完成的是 **TP=1 下的自动 Remote Restore**。仍需继续：
+本阶段完成的是 **TP=1 下的自动 Remote Restore**。自动 Write-Back 已在后续阶段接入，
+详见[自动 Remote Write-Back 设计](remote_writeback_zh.md)。仍需继续：
 
-1. 在本地 Prefix 变为可缓存后自动异步 Write-Back，而不是手工注册 Catalog。
-2. 持久化 Remote Prefix Catalog，并支持服务重启与多实例一致性。
-3. TP>1 时每个 Rank 独立恢复自己的 KV Shard，并进行完成 Barrier。
-4. 独立 CUDA Stream/Event，让 Page Import 与其他请求计算重叠。
-5. 真实 Mooncake 进程端到端测试与 GPU 性能测量。
+1. 持久化 Remote Prefix Catalog，并支持服务重启与多实例一致性。
+2. TP>1 时每个 Rank 独立恢复自己的 KV Shard，并进行完成 Barrier。
+3. 独立 CUDA Stream/Event，让 Page Import 与其他请求计算重叠。
+4. 真实 Mooncake 进程端到端测试与 GPU 性能测量。
