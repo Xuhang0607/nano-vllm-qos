@@ -1,0 +1,276 @@
+<p align="center">
+  <img width="280" src="assets/logo.png" alt="Nano-vLLM logo">
+</p>
+
+<p align="center">
+  <strong>Nano-vLLM QoS Lab</strong><br>
+  基于 nano-vLLM 的 SLO 感知调度、页对齐 Radix 前缀缓存与分层 KV Cache 研究
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | 简体中文
+</p>
+
+# Nano-vLLM QoS Lab
+
+本仓库是基于
+[GeeeekExplorer/nano-vllm](https://github.com/GeeeekExplorer/nano-vllm)
+进行的推理引擎二次开发项目。项目保留 nano-vLLM 简洁的推理链路，重点探索一个
+LLM Serving 问题：当在线请求和批处理请求具有不同的优先级与延迟预算时，推理引擎应该如何协同请求调度、前缀复用与 KV Cache 分层放置？
+
+当前里程碑已经实现优先级与延迟预算感知调度器 PALS、页对齐 Radix 前缀索引、
+GPU/CPU/Mooncake 分层缓存决策模型，以及 Mooncake 字节对象存储适配器。原有 FCFS
+与 Hash Prefix Cache 作为基线保留，便于对每项优化进行可复现的对比。
+
+> 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。真实远端
+> GPU KV Cache 数据路径尚未完成，并在 Roadmap 中明确列出。
+
+## 项目背景
+
+长上下文对话、共享 System Prompt、Agent 与 RAG 工作负载中存在大量重复 Token
+前缀。在线推理引擎需要同时回答三个互相关联的问题：
+
+1. 当请求的 TTFT、TPOT、E2E SLO 和优先级不同时，下一个应该运行谁？
+2. 如何组织共享前缀，同时避免把逻辑前缀结构与物理 KV Page 绑定在一起？
+3. 当 CPU 或远端已经存在某段 KV Cache 时，传输一定比重新 Prefill 更快吗？
+
+项目按照 **问题 -> 方案 -> 代码落点 -> 可验证指标** 的方式推进。尚处于原型阶段的
+能力会明确标注，不把设计目标写成已经完成的结果。
+
+## 系统架构
+
+```mermaid
+flowchart LR
+    A[客户端请求] --> B[LLMEngine]
+    B --> C{调度策略}
+    C -->|FCFS 基线| D[Scheduler]
+    C -->|PALS: 优先级 + SLO Slack| D
+    D --> E[BlockManager]
+    E --> F{前缀缓存后端}
+    F -->|Hash 基线| G[Hash Prefix Cache]
+    F -->|Radix| H[页对齐 Radix 索引]
+    H --> I[GPU KV Pages]
+    H -. 元数据查询 .-> J[CPU Cache]
+    H -. 元数据查询 .-> K[Mooncake Store]
+    J --> L[Transfer-vs-Recompute 决策器]
+    K --> L
+    L -. 规划恢复 .-> I
+    I --> M[ModelRunner / Attention / Sampling]
+```
+
+实线部分已经接入 nano-vLLM 的调度与本地 Block 管理链路。虚线部分是分层缓存控制面，
+真实模型 KV Tensor 的跨层搬运尚未接入。
+
+## 已实现内容
+
+| 模块 | 实现内容 | 当前状态 |
+| --- | --- | --- |
+| SLO 感知调度 | 请求优先级、TTFT/TPOT/E2E 目标、EWMA 执行时间估计、紧迫度排序、老化与抢占对象选择 | 已接入推理调度器 |
+| 请求可观测性 | Queue、TTFT、TPOT、E2E、抢占次数与 SLO 达成率 | 已接入 |
+| Radix 前缀缓存 | Longest Prefix Match、边分裂、并发插入规范化、引用管理、Page 对齐与 LRU 叶节点驱逐 | 已接入 BlockManager |
+| 对比基线 | FCFS vs. PALS，Hash Prefix Cache vs. Radix Prefix Cache | 已实现 |
+| 分层缓存索引 | GPU/CPU/Mooncake 独立 Radix 索引与驻留位置查询 | 控制面原型 |
+| Transfer-vs-Recompute | KV 几何尺寸、带宽/时延/拥塞模型与最低成本来源选择 | 控制面原型 |
+| Mooncake 适配器 | 单对象与批量接口、稳定 KV Page 标识、Fake Store 测试与 TCP 冒烟脚本 | 适配层已实现 |
+| 异步传输协调 | Key 级状态机、重复 Fetch 合并、取消隔离、失败重试与 Fetch/Write/Evict 有序执行 | 控制面原型 |
+| 真实远端 KV Tensor | GPU/CPU 序列化、异步拷贝、调度器阻塞与唤醒 | Roadmap |
+
+## 核心设计
+
+### 1. 面向延迟预算的优先级调度
+
+每个请求可以声明优先级与三个可选 SLO：
+
+```python
+from nanovllm import LLM, RequestQoS, SamplingParams
+
+llm = LLM(
+    "/path/to/model",
+    scheduling_policy="pals",
+    prefix_cache_backend="radix",
+    enforce_eager=True,
+)
+
+outputs = llm.generate(
+    ["请总结这份故障报告。"],
+    SamplingParams(temperature=0.6, max_tokens=128),
+    request_qos=RequestQoS(
+        priority=4,
+        ttft_slo_ms=100.0,
+        tpot_slo_ms=20.0,
+        e2e_slo_ms=1000.0,
+        request_class="interactive",
+    ),
+)
+
+print(outputs[0]["metrics"])
+print(llm.get_scheduler_metrics())
+```
+
+PALS 估算剩余 Prefill/Decode 服务时间，并根据剩余延迟预算计算请求紧迫度：
+
+```text
+slack = SLO 预算 - 已用时间 - 预计剩余服务时间
+score = slack - 优先级补偿 - 等待老化补偿
+```
+
+`score` 越小，请求越紧迫。当 KV Page 不足时，同一策略会选择最不紧迫的 Running
+请求作为抢占对象。
+
+### 2. Page-Aligned Radix Prefix Cache
+
+项目保留原有链式 Block Hash 作为基线，并增加显式的 Radix 层次结构：
+
+```text
+请求 Token -> Page Key -> Radix 最长前缀匹配 -> 物理 Block ID
+                                            -> 仅 Prefill 剩余后缀
+```
+
+Radix Tree 只保存前缀元数据和 Block Handle，物理 GPU KV Page 仍由
+`BlockManager` 管理。这样 Prefix Split 与共享逻辑不会侵入 Tensor 分配层。
+
+### 3. 分层 KV Cache 决策
+
+决策器会把本地重计算与每个可用层级进行比较：
+
+```text
+T_restore = 固定时延 + KV 字节数 / 有效带宽
+            + 未命中后缀的 Prefill 时间
+T_recompute = 从本地命中边界开始的 Prefill 时间
+decision = argmin(T_recompute, T_cpu_restore, T_mooncake_restore)
+```
+
+因此 **Remote Hit 不等于 Always Restore**。短前缀或拥塞链路可能更适合重计算，长前缀
+才更可能抵消远端传输开销。
+
+### 4. 异步传输状态机
+
+`AsyncKVTransferCoordinator` 为每个远端对象维护 `ABSENT`、`FETCHING`、
+`RESIDENT`、`WRITING`、`EVICTING` 与 `FAILED` 状态。多个并发读取者只会触发一次
+后端 Fetch；通过 `asyncio.shield` 隔离请求取消，某个请求退出不会取消其他请求仍在等待的共享操作。
+
+每个 Key 还维护单调递增的 Generation 和有序 I/O Tail。当 Evict 覆盖正在执行的 Fetch
+时，旧 Generation 无法重新发布过期 Payload，同时 Backend Remove 会排在 Read 之后执行。
+失败状态可观测、可重试，避免对象永久卡在中间状态。
+
+## 复现控制面实验
+
+控制面测试不需要模型权重和 CUDA GPU：
+
+```bash
+python -m pip install -r requirements-control.txt
+python -m pytest -q
+
+python -m benchmarks.benchmark_qos_scheduler \
+  --output-json benchmarks/results/qos_simulation.json
+
+python -m benchmarks.benchmark_tiered_cache \
+  --output-json benchmarks/results/tiered_cache_simulation.json
+```
+
+### 确定性模拟结果
+
+| 实验 | 基线 | 本项目策略 | 结果 |
+| --- | ---: | ---: | ---: |
+| 交互请求 TTFT p95 | FCFS: 221.08 ms | PALS: 10.61 ms | 降低 95.2% |
+| Batch E2E SLO 达成率 | FCFS: 100% | PALS: 100% | 保持不变 |
+| 模拟 Makespan | FCFS: 445.42 ms | PALS: 542.62 ms | 增加 21.8% |
+| 平均缓存访问成本 | 本地重计算: 107.20 ms | Cost-aware: 95.96 ms | 降低 10.5% |
+| 平均缓存访问成本 | Always Restore: 168.93 ms | Cost-aware: 95.96 ms | 降低 43.2% |
+
+第一个工作负载有意混合低延迟交互请求与吞吐优先的 Batch 请求。结果体现了明确的策略
+权衡：PALS 以更长的 Makespan 为代价，保护交互请求 TTFT，同时保持 Batch E2E SLO。
+这里的 95.2% **不是实机性能提升结论**。
+
+原始结果保存在 [`benchmarks/results`](benchmarks/results)。两个 Benchmark 都使用固定
+工作负载，因此可以在 CI 中检测调度与缓存策略回归。
+
+## 安装与原始推理链路
+
+完整模型推理需要满足上游项目的 CUDA 环境要求。典型的本地开发安装方式为：
+
+```bash
+git clone <this-repository-url>
+cd nano-vllm-qos
+python -m pip install -e .
+```
+
+```python
+from nanovllm import LLM, SamplingParams
+
+llm = LLM("/path/to/Qwen3-0.6B", enforce_eager=True)
+params = SamplingParams(temperature=0.6, max_tokens=256)
+outputs = llm.generate(["你好，Nano-vLLM。"], params)
+print(outputs[0]["text"])
+```
+
+## 可选 Mooncake 冒烟测试
+
+在受支持的 Linux 环境中，可先验证 Mooncake 适配器，再开展真实 KV Tensor 集成：
+
+```bash
+python -m pip install -e ".[mooncake]"
+mooncake_master
+python -m scripts.mooncake_smoke --protocol tcp
+```
+
+当前适配器已通过 CPU Fake Store 单测。Windows 环境尚未验证真实 Mooncake 进程、
+RDMA 和 GPU Tensor 数据搬运。
+
+## 代码导览
+
+| 路径 | 作用 |
+| --- | --- |
+| `nanovllm/engine/qos.py` | 请求 QoS、指标、服务时间估计与 FCFS/PALS 策略 |
+| `nanovllm/engine/scheduler.py` | 调度策略与 Waiting/Running 队列、抢占逻辑的集成 |
+| `nanovllm/engine/radix_cache.py` | Page-Aligned Radix 前缀元数据 |
+| `nanovllm/engine/block_manager.py` | Hash/Radix 后端接入与物理 Block 所有权 |
+| `nanovllm/engine/hierarchical_cache.py` | 分层索引与 Transfer-vs-Recompute 决策器 |
+| `nanovllm/engine/storage_backend.py` | In-Memory 与 Mooncake KV 对象适配器 |
+| `nanovllm/engine/transfer_coordinator.py` | 异步 KV 状态机、并发请求合并与 Key 级 I/O 排序 |
+| `benchmarks/` | 确定性的调度与分层缓存模拟器 |
+| `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
+| `docs/` | 中文设计文档与论文阅读清单 |
+
+## 当前边界与 Roadmap
+
+本项目有意区分“已经可验证的代码”和“最终设计目标”：
+
+- [x] FCFS/PALS 可插拔调度器与请求级 SLO 指标
+- [x] Hash/Radix 可插拔前缀缓存
+- [x] 分层元数据索引与传输成本模型
+- [x] Mooncake 对象适配器与确定性 Benchmark
+- [x] 可合并重复请求的异步 Fetch/Write/Evict 状态机
+- [ ] 真实逐层 K/V Page 序列化与 CPU <-> GPU 传输
+- [ ] Remote Fetch 完成后唤醒调度器，并正确处理 Request Cancellation
+- [ ] 在统一模型、硬件、请求到达率和 Prompt 分布下完成 GPU Baseline 与 Ablation
+- [ ] 报告 TTFT/TPOT p50/p95/p99、SLO Goodput、各级命中率、传输字节数和重计算 Token
+
+在统一硬件上完成复现之前，简历和项目介绍不应把模拟数据替换成 GPU 实测结论。
+
+## 为什么这是二次开发而不是简单复现
+
+本项目不是重新运行 nano-vLLM 示例，而是在读清真实执行链路后逐层修改系统策略：
+
+```text
+Hash Prefix      -> Page-Aligned Radix Prefix
+GPU-only pressure -> GPU/CPU/Mooncake 分层规划
+Remote hit       -> Transfer-vs-Recompute 动态决策
+FCFS             -> Priority + SLO Slack 调度
+```
+
+这条主线对应了可以定位到源码、单测和 Benchmark 的实际改动，也保留了基线用于回答
+“为什么这样设计”和“优化代价是什么”。
+
+## 相关文档
+
+- [QoS 调度器设计](docs/qos_scheduler_zh.md)
+- [分层 Radix 与 Mooncake 设计](docs/hierarchical_radix_mooncake_zh.md)
+- [异步 KV 传输状态机设计](docs/async_kv_transfer_zh.md)
+- [相关论文](docs/papers.md)
+
+## 致谢
+
+本项目派生自 [GeeeekExplorer/nano-vllm](https://github.com/GeeeekExplorer/nano-vllm)，
+并保留其 MIT License。上游项目提供了精简的推理引擎、Paged KV Cache、Continuous
+Batching、CUDA Graph 与模型执行基础，本仓库在此基础上开展调度与缓存系统实验。
