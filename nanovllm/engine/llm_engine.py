@@ -36,6 +36,7 @@ class LLMEngine:
 
     def __init__(self, model, **kwargs):
         kv_storage_backend = kwargs.pop("kv_storage_backend", None)
+        self.kv_storage_backend = kv_storage_backend
         remote_prefix_catalog = kwargs.pop("remote_prefix_catalog", None)
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
@@ -126,10 +127,14 @@ class LLMEngine:
                 self._process_remote_writebacks(wait=True)
                 self.remote_restore_service.close()
         finally:
-            self.model_runner.call("exit")
-            del self.model_runner
-            for p in self.ps:
-                p.join()
+            try:
+                self.model_runner.call("exit")
+                del self.model_runner
+                for p in self.ps:
+                    p.join()
+            finally:
+                if self.kv_storage_backend is not None:
+                    self.kv_storage_backend.close()
 
     def _describe_remote_prefix(self, token_ids, num_pages):
         block_size = self.config.kvcache_block_size

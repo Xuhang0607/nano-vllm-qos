@@ -23,8 +23,9 @@ GPU/CPU/Mooncake 分层缓存决策模型、版本化 KV Page 数据面，以及
 恢复、自动远端写回和可重启恢复的持久化 Catalog。原有 FCFS 与 Hash Prefix Cache
 作为基线保留，便于对每项优化进行可复现的对比。
 
-> 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。GPU Page
-> 往返正确性已经单独验证，真实 Mooncake 端到端性能仍属于后续工作。
+> 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。当前已经在
+> WSL2 下验证 Qwen3-0.6B CUDA + Mooncake TCP 的写回、重启和恢复闭环，但该结果
+> 证明的是正确性，不代表吞吐或延迟提升。
 
 ## 项目背景
 
@@ -313,18 +314,24 @@ python scripts/serve_transformers_windows.py `
 Batching、Paged KV、Radix Prefix Cache、Remote KV 或 PALS。前端会明确显示这些能力不可用。
 详细说明见 [Windows 本地运行 Qwen3](docs/windows_qwen3_zh.md)。
 
-## 可选 Mooncake 冒烟测试
+## WSL2 CUDA + Mooncake 完整链路
 
-在受支持的 Linux 环境中，可先验证 Mooncake 适配器，再运行端到端远端恢复：
+可复现部署由三个进程组成：Mooncake Master、持有常驻远端内存段的 Store Service，
+以及 nano-vLLM GPU Worker。请在三个 WSL 终端中分别运行：
 
 ```bash
-python -m pip install -e ".[mooncake]"
-mooncake_master
-python -m scripts.mooncake_smoke --protocol tcp
+bash scripts/run_mooncake_wsl.sh master
+bash scripts/run_mooncake_wsl.sh store
+ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 ```
 
-当前适配器已通过 CPU Fake Store 单测。Windows 环境尚未验证真实 Mooncake 进程、
-RDMA 和 GPU Tensor 数据搬运。
+浏览器打开 `http://127.0.0.1:8020/`。本机重启实验写回 8 个 Qwen3 KV Page，只重启
+GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远端 I/O 失败数为
+0。当前验证使用 WSL2 单机 TCP，RDMA 和多机性能仍属于后续工作。完整安装、原理、
+指标与排错步骤见 [WSL2 CUDA + Mooncake 完整运行指南](docs/wsl_mooncake_full_stack_zh.md)。
+
+如果只想验证适配器，可保持 Master 与 Store Service 运行，再执行
+`python -m scripts.mooncake_smoke --protocol tcp`。
 
 ## 代码导览
 
@@ -342,6 +349,8 @@ RDMA 和 GPU Tensor 数据搬运。
 | `nanovllm/engine/remote_restore.py` | Remote Prefix Catalog、后台 I/O 服务与 Restore/Write-Back Batch |
 | `nanovllm/serve/` | OpenAI 兼容协议、推理 Worker、Mock 后端与对话前端 |
 | `scripts/serve_transformers_windows.py` | Windows 原生环境下带明确标识的真实模型兼容入口 |
+| `scripts/run_mooncake_wsl.sh` | Mooncake Master 与常驻 Store Service 启动入口 |
+| `scripts/run_nanovllm_wsl.sh` | Qwen3 CUDA/PALS/Radix/Mooncake 完整服务入口 |
 | `benchmarks/` | 确定性的调度与分层缓存模拟器 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
@@ -361,6 +370,7 @@ RDMA 和 GPU Tensor 数据搬运。
 - [x] 版本化 Catalog 持久化快照与单写者跨进程重启重建
 - [x] OpenAI 兼容纯文本对话 API、真实 Token 流、请求取消、可选 API Key 与响应式指标前端
 - [x] Windows 原生 Qwen3 Transformers 兼容服务与真实能力标识
+- [x] WSL2 Qwen3 CUDA + Mooncake TCP 自动写回与跨 Worker 重启恢复
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
@@ -394,6 +404,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [Remote Catalog 持久化与重启恢复](docs/persistent_catalog_zh.md)
 - [OpenAI 兼容服务与流式前端设计](docs/openai_serving_zh.md)
 - [Windows 本地运行真实 Qwen3 模型](docs/windows_qwen3_zh.md)
+- [WSL2 运行 CUDA + Mooncake 完整链路](docs/wsl_mooncake_full_stack_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

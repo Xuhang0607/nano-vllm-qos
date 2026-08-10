@@ -1,5 +1,6 @@
 import argparse
 from os import urandom
+from time import sleep
 
 from nanovllm.engine.storage_backend import (
     KVCacheIdentity,
@@ -17,9 +18,17 @@ def main():
     parser.add_argument("--protocol", choices=("tcp", "rdma", "efa"), default="tcp")
     parser.add_argument("--rdma-devices", default="")
     parser.add_argument("--payload-bytes", type=int, default=1024 * 1024)
+    parser.add_argument(
+        "--lease-wait-seconds",
+        type=float,
+        default=10.5,
+        help="Wait for Mooncake's default read lease before removing the object",
+    )
     args = parser.parse_args()
     if args.payload_bytes <= 0:
         parser.error("payload-bytes must be positive")
+    if args.lease_wait_seconds < 0:
+        parser.error("lease-wait-seconds must be non-negative")
 
     config = MooncakeStoreConfig(
         local_hostname=args.hostname,
@@ -42,6 +51,7 @@ def main():
         restored = store.get(key)
         if restored != payload:
             raise RuntimeError("Mooncake round-trip payload mismatch")
+        sleep(args.lease_wait_seconds)
         store.remove(key)
         if store.exists(key):
             raise RuntimeError("Mooncake object still exists after removal")

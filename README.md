@@ -29,8 +29,9 @@ FCFS and hash-prefix policies remain available as baselines, so every
 optimization can be compared instead of only demonstrated in isolation.
 
 > The checked-in performance numbers are deterministic control-plane simulator
-> results, not GPU throughput measurements. GPU page round-trip correctness is
-> validated separately; real Mooncake end-to-end performance is still future work.
+> results, not GPU throughput measurements. A real Qwen3-0.6B CUDA + Mooncake
+> TCP write-back/restart/restore path has been validated under WSL2, but it is a
+> correctness result rather than a throughput or latency claim.
 
 ## Motivation
 
@@ -353,19 +354,26 @@ continuous batching, Paged KV, Radix prefix reuse, remote KV, or PALS. The UI
 reports those capabilities as unavailable. See the
 [Windows Qwen3 guide (Chinese)](docs/windows_qwen3_zh.md).
 
-## Optional Mooncake Smoke Test
+## WSL2 CUDA + Mooncake Full Stack
 
-On a supported Linux environment, install the optional dependency and validate
-the backend adapter before running an end-to-end remote restore:
+The reproducible WSL2 deployment uses three processes: a Mooncake Master, a
+persistent Store Service that owns the remote memory segment, and the
+nano-vLLM GPU worker. Run each command in a separate WSL terminal:
 
 ```bash
-python -m pip install -e ".[mooncake]"
-mooncake_master
-python -m scripts.mooncake_smoke --protocol tcp
+bash scripts/run_mooncake_wsl.sh master
+bash scripts/run_mooncake_wsl.sh store
+ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 ```
 
-The adapter is covered by fake-store unit tests on CPU. A real Mooncake process,
-RDMA, and GPU tensor movement have not been validated on Windows.
+Open `http://127.0.0.1:8020/` for the web console. The validated restart test
+wrote eight Qwen3 KV pages, restarted only the GPU worker, loaded the persistent
+catalog, and restored 2,048 cached tokens with zero remote I/O failures. The
+test used TCP on one WSL2 machine; RDMA and multi-node performance remain future
+work. See the [full WSL2 guide (Chinese)](docs/wsl_mooncake_full_stack_zh.md).
+
+For a smaller adapter-only check, keep the Master and Store Service running and
+use `python -m scripts.mooncake_smoke --protocol tcp`.
 
 ## Repository Guide
 
@@ -383,6 +391,8 @@ RDMA, and GPU tensor movement have not been validated on Windows.
 | `nanovllm/engine/remote_restore.py` | Remote prefix catalog, background I/O service, and restore/write-back batches |
 | `nanovllm/serve/` | OpenAI-compatible protocol, inference worker, mock backend, and web console |
 | `scripts/serve_transformers_windows.py` | Explicitly labeled real-model fallback for native Windows |
+| `scripts/run_mooncake_wsl.sh` | Mooncake Master and persistent Store Service launch entrypoint |
+| `scripts/run_nanovllm_wsl.sh` | Full Qwen3 CUDA/PALS/Radix/Mooncake serving entrypoint |
 | `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
@@ -403,6 +413,7 @@ design.
 - [x] Versioned persistent catalog snapshot and single-writer reconstruction across process restarts
 - [x] OpenAI-compatible text chat API, true token streaming, request cancellation, API-key option, and responsive metrics console
 - [x] Native-Windows Qwen3 Transformers compatibility server with honest capability reporting
+- [x] WSL2 Qwen3 CUDA + Mooncake TCP write-back and cross-worker restart restore
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
@@ -423,6 +434,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [Persistent remote catalog (Chinese)](docs/persistent_catalog_zh.md)
 - [OpenAI-compatible serving and streaming console (Chinese)](docs/openai_serving_zh.md)
 - [Run the real Qwen3 model on Windows (Chinese)](docs/windows_qwen3_zh.md)
+- [Run the CUDA + Mooncake full stack on WSL2 (Chinese)](docs/wsl_mooncake_full_stack_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements
