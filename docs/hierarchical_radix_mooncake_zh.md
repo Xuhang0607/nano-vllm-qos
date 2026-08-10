@@ -88,16 +88,23 @@ python -m benchmarks.benchmark_tiered_cache \
 追求最高 remote hit rate，而是在拥塞时接受更多重算。这是控制面模型结果，不是
 Mooncake、RDMA 或 GPU 性能数据。
 
-## 4. 尚未完成的数据面
+## 4. 当前数据面状态
 
-当前不能声称“完成 nano-vLLM + Mooncake 推理”。真实数据面还需要：
+当前已经完成：
 
-1. ModelRunner 将每个 TP rank、每层的 K/V page 组织成稳定的 tensor layout；
-2. prefill 完成后异步 write-back，并记录 in-flight、ready、failed 状态；
-3. 请求到达后批量查询 L3，按规划器决定是否 prefetch；
-4. 为目标 GPU block 分配地址，通过注册内存和 `get_into`/batch API 恢复数据；
-5. 恢复成功后再更新 `num_cached_tokens`，超时则取消等待并回退到 recompute；
-6. 处理 TP rank 一致性、请求取消、重复写、驱逐与正在传输对象之间的竞态。
+1. 稳定、带版本和 Checksum 的 KV Page Envelope；
+2. ModelRunner Rank-Local Tensor Page 打包与恢复；
+3. Remote Prefix Cost Model 与 `WAITING_FOR_KV` 调度状态；
+4. 后台 GET、重复请求合并、取消隔离和失败回退；
+5. 主线程 GPU Import、BlockManager 原子注册与 Scheduler 唤醒。
+
+当前仍不能声称“完成 nano-vLLM + Mooncake 分布式推理”。仍需：
+
+1. Prefill 完成后的自动异步 Write-Back；
+2. Remote Prefix Catalog 持久化和多实例一致性；
+3. TP>1 Shard 恢复与跨 Rank 同步；
+4. 独立 CUDA Stream/Event 和注册内存零拷贝路径；
+5. 真实 Mooncake 进程端到端性能验证。
 
 官方 Mooncake 建议先在 Ubuntu 使用 TCP 完成正确性验证，再在具备 RDMA/GPUDirect
 条件的节点测试零拷贝路径。仓库提供 `python -m scripts.mooncake_smoke` 做第一步。

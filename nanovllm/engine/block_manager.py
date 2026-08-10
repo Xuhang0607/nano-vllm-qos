@@ -1,9 +1,10 @@
 from collections import deque
-import xxhash
-import numpy as np
 
-from nanovllm.engine.sequence import Sequence
+import numpy as np
+import xxhash
+
 from nanovllm.engine.radix_cache import RadixPrefixCache
+from nanovllm.engine.sequence import Sequence
 
 
 class Block:
@@ -142,6 +143,48 @@ class BlockManager:
         for i in range(num_cached_blocks, seq.num_blocks):
             seq.block_table.append(self._allocate_block())
         seq.num_cached_tokens = num_cached_blocks * self.block_size
+
+    def reserve_restore(
+        self,
+        seq: Sequence,
+        num_local_cached_blocks: int,
+        num_remote_cached_blocks: int,
+    ) -> tuple[int, ...]:
+        if not num_local_cached_blocks < num_remote_cached_blocks < seq.num_blocks:
+            raise ValueError(
+                "restored prefix must extend the local cache and leave a writable tail"
+            )
+        self.allocate(seq, num_local_cached_blocks)
+        return tuple(
+            seq.block_table[num_local_cached_blocks:num_remote_cached_blocks]
+        )
+
+    def commit_restored_prefix(self, seq: Sequence, num_cached_blocks: int):
+        current_blocks = seq.num_cached_tokens // self.block_size
+        if not current_blocks < num_cached_blocks < seq.num_blocks:
+            raise ValueError("restored prefix length is invalid")
+        if len(seq.block_table) != seq.num_blocks:
+            raise RuntimeError("restored request does not own a complete block table")
+
+        if self.prefix_cache_backend == "radix":
+            for index in range(current_blocks, num_cached_blocks):
+                block = self.blocks[seq.block_table[index]]
+                block.update(-1, seq.block(index))
+            keys = [tuple(seq.block(index)) for index in range(num_cached_blocks)]
+            self.radix_cache.insert(keys, seq.block_table[:num_cached_blocks])
+        else:
+            previous_hash = -1
+            for index in range(num_cached_blocks):
+                block = self.blocks[seq.block_table[index]]
+                token_ids = seq.block(index)
+                previous_hash = self.compute_hash(token_ids, previous_hash)
+                block.update(previous_hash, token_ids)
+                self.hash_to_block_id[previous_hash] = block.block_id
+        seq.num_cached_tokens = num_cached_blocks * self.block_size
+
+    def abort_restore(self, seq: Sequence):
+        if seq.block_table:
+            self.deallocate(seq)
 
     def deallocate(self, seq: Sequence):
         for block_id in reversed(seq.block_table):

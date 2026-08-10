@@ -9,6 +9,7 @@ from nanovllm.sampling_params import SamplingParams
 
 class SequenceStatus(Enum):
     WAITING = auto()
+    WAITING_FOR_KV = auto()
     RUNNING = auto()
     FINISHED = auto()
 
@@ -47,6 +48,13 @@ class Sequence:
         self.finished_time = None
         self.preemption_count = 0
         self.last_budget_ms = None
+        self.remote_restore_attempted = False
+        self.remote_restore_started_time = None
+        self.remote_restore_completed_time = None
+        self.remote_restore_wait_ms = 0.0
+        self.remote_restored_tokens = 0
+        self.remote_restore_failures = 0
+        self.remote_restore_error = None
 
     def __len__(self):
         return self.num_tokens
@@ -101,6 +109,38 @@ class Sequence:
     def mark_finished(self, now: float):
         self.finished_time = now
 
+    def begin_remote_restore(self, now: float):
+        if self.status != SequenceStatus.WAITING:
+            raise RuntimeError("only waiting requests can begin KV restore")
+        self.status = SequenceStatus.WAITING_FOR_KV
+        self.remote_restore_attempted = True
+        self.remote_restore_started_time = now
+        self.remote_restore_completed_time = None
+        self.remote_restore_error = None
+
+    def finish_remote_restore(self, now: float, restored_tokens: int):
+        if self.status != SequenceStatus.WAITING_FOR_KV:
+            raise RuntimeError("request is not waiting for KV restore")
+        if restored_tokens <= 0:
+            raise ValueError("restored_tokens must be positive")
+        self.status = SequenceStatus.WAITING
+        self.remote_restore_completed_time = now
+        self.remote_restore_wait_ms += (
+            now - self.remote_restore_started_time
+        ) * 1000.0
+        self.remote_restored_tokens += restored_tokens
+
+    def fail_remote_restore(self, now: float, error: Exception):
+        if self.status != SequenceStatus.WAITING_FOR_KV:
+            raise RuntimeError("request is not waiting for KV restore")
+        self.status = SequenceStatus.WAITING
+        self.remote_restore_completed_time = now
+        self.remote_restore_wait_ms += (
+            now - self.remote_restore_started_time
+        ) * 1000.0
+        self.remote_restore_failures += 1
+        self.remote_restore_error = f"{type(error).__name__}: {error}"
+
     def metrics(self) -> RequestMetrics:
         if self.arrival_time is None or self.first_token_time is None or self.finished_time is None:
             raise RuntimeError("request metrics are only available after completion")
@@ -122,6 +162,9 @@ class Sequence:
             tpot_ms=tpot_ms,
             e2e_ms=e2e_ms,
             preemptions=self.preemption_count,
+            kv_restore_wait_ms=self.remote_restore_wait_ms,
+            kv_restored_tokens=self.remote_restored_tokens,
+            kv_restore_failures=self.remote_restore_failures,
             ttft_slo_ms=self.qos.ttft_slo_ms,
             tpot_slo_ms=self.qos.tpot_slo_ms,
             e2e_slo_ms=self.qos.e2e_slo_ms,

@@ -1,18 +1,32 @@
 from collections import deque
+from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING
 
-from nanovllm.engine.sequence import Sequence, SequenceStatus
 from nanovllm.engine.block_manager import BlockManager
 from nanovllm.engine.qos import ExecutionTimeEstimator, create_policy, summarize_metrics
+from nanovllm.engine.sequence import Sequence, SequenceStatus
 
 if TYPE_CHECKING:
     from nanovllm.config import Config
 
 
+@dataclass(slots=True)
+class PendingRestoreState:
+    sequence: Sequence
+    transfer: object
+    total_cached_blocks: int
+    restored_blocks: int
+
+
 class Scheduler:
 
-    def __init__(self, config: "Config", clock=perf_counter):
+    def __init__(
+        self,
+        config: "Config",
+        clock=perf_counter,
+        remote_restore_service=None,
+    ):
         self.max_num_seqs = config.max_num_seqs
         self.max_num_batched_tokens = config.max_num_batched_tokens
         self.eos = config.eos
@@ -35,13 +49,97 @@ class Scheduler:
         self.policy = create_policy(self.policy_name, self.estimator, config)
         self.completed_metrics = []
         self.metrics_by_seq_id = {}
+        self.remote_restore_service = remote_restore_service
+        self.pending_restores: dict[int, PendingRestoreState] = {}
+        self.remote_restore_started = 0
+        self.remote_restore_completed = 0
+        self.remote_restore_failed = 0
 
     def is_finished(self):
-        return not self.waiting and not self.running
+        return not self.waiting and not self.running and not self.pending_restores
 
     def add(self, seq: Sequence):
         seq.mark_arrived(self.step_id, self.clock())
         self.waiting.append(seq)
+
+    def _start_remote_restore(
+        self,
+        seq: Sequence,
+        local_cached_blocks: int,
+        now: float,
+    ) -> bool:
+        if self.remote_restore_service is None or seq.remote_restore_attempted:
+            return False
+        candidate = self.remote_restore_service.plan_restore(
+            seq,
+            local_cached_blocks,
+            self.estimator.prefill_ms_per_token,
+        )
+        if candidate is None:
+            return False
+
+        total_cached_blocks = candidate.num_blocks
+        block_ids = self.block_manager.reserve_restore(
+            seq,
+            local_cached_blocks,
+            total_cached_blocks,
+        )
+        pages = candidate.pages[local_cached_blocks:total_cached_blocks]
+        seq.begin_remote_restore(now)
+        try:
+            transfer = self.remote_restore_service.submit_restore(
+                seq.seq_id,
+                pages,
+                block_ids,
+            )
+        except Exception as exc:  # noqa: BLE001 - restore setup falls back to prefill
+            self.block_manager.abort_restore(seq)
+            seq.fail_remote_restore(now, exc)
+            self.remote_restore_failed += 1
+            return False
+
+        self.waiting.remove(seq)
+        self.pending_restores[seq.seq_id] = PendingRestoreState(
+            sequence=seq,
+            transfer=transfer,
+            total_cached_blocks=total_cached_blocks,
+            restored_blocks=len(pages),
+        )
+        self.remote_restore_started += 1
+        return True
+
+    def ready_remote_restores(self):
+        return tuple(
+            state
+            for state in self.pending_restores.values()
+            if state.transfer.done
+        )
+
+    def complete_remote_restore(self, seq_id: int):
+        state = self.pending_restores[seq_id]
+        self.block_manager.commit_restored_prefix(
+            state.sequence,
+            state.total_cached_blocks,
+        )
+        state.sequence.finish_remote_restore(
+            self.clock(),
+            state.restored_blocks * self.block_size,
+        )
+        del self.pending_restores[seq_id]
+        self.waiting.append(state.sequence)
+        self.remote_restore_completed += 1
+
+    def fail_remote_restore(self, seq_id: int, error: Exception):
+        state = self.pending_restores.pop(seq_id)
+        state.transfer.cancel_waiters()
+        self.block_manager.abort_restore(state.sequence)
+        state.sequence.fail_remote_restore(self.clock(), error)
+        self.waiting.appendleft(state.sequence)
+        self.remote_restore_failed += 1
+
+    @property
+    def has_pending_restores(self):
+        return bool(self.pending_restores)
 
     def schedule(self) -> tuple[list[Sequence], bool]:
         self.step_id += 1
@@ -63,6 +161,8 @@ class Scheduler:
                 num_cached_blocks = self.block_manager.can_allocate(seq)
                 if num_cached_blocks == -1:
                     break
+                if self._start_remote_restore(seq, num_cached_blocks, now):
+                    continue
                 num_tokens = seq.num_tokens - num_cached_blocks * self.block_size
             else:
                 num_tokens = seq.num_tokens - seq.num_cached_tokens
@@ -100,7 +200,10 @@ class Scheduler:
                 seq.is_prefill = False
                 self.block_manager.may_append(seq)
                 scheduled_seqs.append(seq)
-        assert scheduled_seqs
+        if self.pending_restores and not self.running:
+            return [], True
+        if not scheduled_seqs:
+            raise RuntimeError("no runnable request fits in the available KV cache")
         self.running.extendleft(reversed(scheduled_seqs))
         return scheduled_seqs, False
 
@@ -143,4 +246,15 @@ class Scheduler:
             "decode_ms_per_token_ewma": self.estimator.decode_ms_per_token,
         })
         result.update(self.block_manager.cache_metrics())
+        result.update({
+            "remote_restore_started": self.remote_restore_started,
+            "remote_restore_completed": self.remote_restore_completed,
+            "remote_restore_failed": self.remote_restore_failed,
+            "remote_restore_pending": len(self.pending_restores),
+        })
+        if self.remote_restore_service is not None:
+            result.update({
+                f"remote_io_{key}": value
+                for key, value in self.remote_restore_service.metrics().items()
+            })
         return result

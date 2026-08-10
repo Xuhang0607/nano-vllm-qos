@@ -149,8 +149,9 @@ restored_bytes = model_runner.import_kv_page(
 )
 ```
 
-导入时会自动校验当前 `ModelRunner.rank` 和实际 KV Tensor Layout。当前方法是数据面原语，
-尚未由 Scheduler 自动触发。
+导入时会自动校验当前 `ModelRunner.rank` 和实际 KV Tensor Layout。TP=1 下已经由
+Scheduler 自动触发，完整流程见
+[Remote KV Restore 与 Scheduler 唤醒闭环](remote_restore_scheduler_zh.md)。
 
 ## 7. 分层存储桥接
 
@@ -209,12 +210,12 @@ python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 3. Pinned CPU Staging Buffer 的 GPU/CPU 搬运原语。
 4. Async Coordinator 与存储 Backend 的 Page 对象桥接。
 5. `ModelRunner` Rank-Local 导出/导入入口。
+6. TP=1 下的 `WAITING_FOR_KV`、后台 Fetch、主线程 Import、BlockManager 原子注册与唤醒。
 
 仍需完成：
 
-1. Scheduler 发现 Remote Prefix 后进入 `WAITING_FOR_KV`，而不是立即 Prefill。
-2. Fetch 完成后分配/注册 Physical Block，并唤醒请求。
-3. 写回触发策略以及 Block Refcount、Eviction 与 Transfer 生命周期联动。
-4. Tensor Parallel 下每个 Rank 独立读写自己的 Shard，并进行跨 Rank 完成同步。
-5. 使用独立 CUDA Stream 与 Event 实现传输/计算重叠。
-6. 接入真实 Mooncake 进程并测量 TTFT、带宽与 Crossover Point。
+1. 自动写回触发策略以及 Block Refcount、Eviction 与 Transfer 生命周期联动。
+2. Remote Prefix Catalog 持久化与服务重启重建。
+3. Tensor Parallel 下每个 Rank 独立读写自己的 Shard，并进行跨 Rank 完成同步。
+4. 使用独立 CUDA Stream 与 Event 实现传输/计算重叠。
+5. 接入真实 Mooncake 进程并测量 TTFT、带宽与 Crossover Point。

@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass
 from statistics import median
-from typing import TYPE_CHECKING, Iterable, Optional, Sequence as TypingSequence
+from typing import TYPE_CHECKING, Iterable, Optional
+from typing import Sequence as TypingSequence
 
 if TYPE_CHECKING:
     from nanovllm.engine.sequence import Sequence
@@ -39,6 +40,9 @@ class RequestMetrics:
     tpot_ms: Optional[float]
     e2e_ms: float
     preemptions: int
+    kv_restore_wait_ms: float
+    kv_restored_tokens: int
+    kv_restore_failures: int
     ttft_slo_ms: Optional[float]
     tpot_slo_ms: Optional[float]
     e2e_slo_ms: Optional[float]
@@ -108,6 +112,10 @@ def summarize_metrics(metrics: TypingSequence[RequestMetrics]):
             "e2e_ms_p50": 0.0,
             "e2e_ms_p95": 0.0,
             "preemptions": 0,
+            "kv_restore_wait_ms_p50": 0.0,
+            "kv_restore_wait_ms_p95": 0.0,
+            "kv_restored_tokens": 0,
+            "kv_restore_failures": 0,
             "ttft_slo_attainment": None,
             "tpot_slo_attainment": None,
             "e2e_slo_attainment": None,
@@ -117,6 +125,7 @@ def summarize_metrics(metrics: TypingSequence[RequestMetrics]):
     ttft_values = [item.ttft_ms for item in metrics]
     tpot_values = [item.tpot_ms for item in metrics if item.tpot_ms is not None]
     e2e_values = [item.e2e_ms for item in metrics]
+    restore_wait_values = [item.kv_restore_wait_ms for item in metrics]
     ttft_slo = [item.ttft_slo_met for item in metrics if item.ttft_slo_met is not None]
     tpot_slo = [item.tpot_slo_met for item in metrics if item.tpot_slo_met is not None]
     e2e_slo = [item.e2e_slo_met for item in metrics if item.e2e_slo_met is not None]
@@ -131,6 +140,10 @@ def summarize_metrics(metrics: TypingSequence[RequestMetrics]):
         "e2e_ms_p50": median(e2e_values),
         "e2e_ms_p95": percentile(e2e_values, 0.95),
         "preemptions": sum(item.preemptions for item in metrics),
+        "kv_restore_wait_ms_p50": median(restore_wait_values),
+        "kv_restore_wait_ms_p95": percentile(restore_wait_values, 0.95),
+        "kv_restored_tokens": sum(item.kv_restored_tokens for item in metrics),
+        "kv_restore_failures": sum(item.kv_restore_failures for item in metrics),
         "ttft_slo_attainment": sum(ttft_slo) / len(ttft_slo) if ttft_slo else None,
         "tpot_slo_attainment": sum(tpot_slo) / len(tpot_slo) if tpot_slo else None,
         "e2e_slo_attainment": sum(e2e_slo) / len(e2e_slo) if e2e_slo else None,

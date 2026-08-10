@@ -19,11 +19,11 @@
 LLM Serving 问题：当在线请求和批处理请求具有不同的优先级与延迟预算时，推理引擎应该如何协同请求调度、前缀复用与 KV Cache 分层放置？
 
 当前里程碑已经实现优先级与延迟预算感知调度器 PALS、页对齐 Radix 前缀索引、
-GPU/CPU/Mooncake 分层缓存决策模型，以及 Mooncake 字节对象存储适配器。原有 FCFS
-与 Hash Prefix Cache 作为基线保留，便于对每项优化进行可复现的对比。
+GPU/CPU/Mooncake 分层缓存决策模型、版本化 KV Page 数据面，以及 TP=1 下的自动远端
+恢复。原有 FCFS 与 Hash Prefix Cache 作为基线保留，便于对每项优化进行可复现的对比。
 
-> 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。真实远端
-> GPU KV Cache 数据路径尚未完成，并在 Roadmap 中明确列出。
+> 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。GPU Page
+> 往返正确性已经单独验证，真实 Mooncake 端到端性能仍属于后续工作。
 
 ## 项目背景
 
@@ -54,12 +54,13 @@ flowchart LR
     H -. 元数据查询 .-> K[Mooncake Store]
     J --> L[Transfer-vs-Recompute 决策器]
     K --> L
-    L -. 规划恢复 .-> I
+    L --> N[WAITING_FOR_KV / 后台 GET]
+    N --> I
     I --> M[ModelRunner / Attention / Sampling]
 ```
 
-实线部分已经接入 nano-vLLM 的调度与本地 Block 管理链路。虚线部分是分层缓存控制面，
-真实模型 KV Tensor 的跨层搬运尚未接入。
+TP=1 的远端恢复路径已经从 Prefix Lookup 接到 GPU Page Import 与 Scheduler 唤醒。
+自动 Write-Back、Catalog 持久化重建、传输/计算重叠和 TP 多 Rank 恢复仍属于后续工作。
 
 ## 已实现内容
 
@@ -74,7 +75,7 @@ flowchart LR
 | Mooncake 适配器 | 单对象与批量接口、稳定 KV Page 标识、Fake Store 测试与 TCP 冒烟脚本 | 适配层已实现 |
 | 异步传输协调 | Key 级状态机、重复 Fetch 合并、取消隔离、失败重试与 Fetch/Write/Evict 有序执行 | 控制面原型 |
 | KV Page 数据面 | 版本化/带校验 Envelope、布局兼容检查、Pinned CPU Staging 与真实 Tensor Page 导出/恢复 | Rank-Local 原语已实现 |
-| 自动远端恢复 | Scheduler 阻塞/唤醒、BlockManager 注册、传输/计算重叠与 TP Rank 协同 | Roadmap |
+| 自动远端恢复 | `WAITING_FOR_KV`、Block 预留、后台 GET、主线程 GPU Import、Radix 原子提交、唤醒与 Prefill 回退 | TP=1 已接入 |
 
 ## 核心设计
 
@@ -161,8 +162,18 @@ decision = argmin(T_recompute, T_cpu_restore, T_mooncake_restore)
 模型身份、TP Rank、逻辑 Page Index、Tensor Layout、原始字节和 BLAKE2b Checksum。
 
 `ModelRunner` 已提供 Rank-Local 导出/导入原语。恢复前会校验消费端身份与当前 KV Cache
-实际 Layout，再把字节写入新分配的 Physical Block。当前 API 在返回前同步，Scheduler
-驱动的异步恢复仍属于下一阶段。
+实际 Layout，再把字节写入新分配的 Physical Block。当前 API 在返回前同步；下一节介绍
+Scheduler 编排，传输与计算重叠仍属于后续工作。
+
+### 6. Scheduler 驱动的远端恢复
+
+配置 `kv_storage_backend` 后，当 Remote Prefix 长于 Local Match 时，系统先通过
+Transfer-vs-Recompute Cost Model 决策。接受恢复的请求会预留 Physical Block 并进入
+`WAITING_FOR_KV`。Backend GET 在独立 asyncio Loop 中执行，CUDA Import 保持在主推理线程。
+
+只有全部 Page 通过校验并写入 GPU 后，`BlockManager` 才会把 Prefix 原子发布到 Local
+Radix 并唤醒请求。缺页或损坏会释放全部预留并回退本地 Prefill；并发请求通过 Transfer
+Coordinator 共享 Backend Read。
 
 ## 复现控制面实验
 
@@ -223,7 +234,7 @@ print(outputs[0]["text"])
 
 ## 可选 Mooncake 冒烟测试
 
-在受支持的 Linux 环境中，可先验证 Mooncake 适配器，再开展真实 KV Tensor 集成：
+在受支持的 Linux 环境中，可先验证 Mooncake 适配器，再运行端到端远端恢复：
 
 ```bash
 python -m pip install -e ".[mooncake]"
@@ -246,6 +257,7 @@ RDMA 和 GPU Tensor 数据搬运。
 | `nanovllm/engine/storage_backend.py` | In-Memory 与 Mooncake KV 对象适配器 |
 | `nanovllm/engine/transfer_coordinator.py` | 异步 KV 状态机、并发请求合并与 Key 级 I/O 排序 |
 | `nanovllm/engine/kv_page.py` | 稳定 Page Envelope、Torch Page 搬运与异步存储桥接 |
+| `nanovllm/engine/remote_restore.py` | Remote Prefix Catalog、后台 I/O 服务与 Pending Restore Batch |
 | `benchmarks/` | 确定性的调度与分层缓存模拟器 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
@@ -260,8 +272,10 @@ RDMA 和 GPU Tensor 数据搬运。
 - [x] Mooncake 对象适配器与确定性 Benchmark
 - [x] 可合并重复请求的异步 Fetch/Write/Evict 状态机
 - [x] 版本化真实 K/V Page 序列化与同步 CPU <-> GPU 恢复原语
+- [x] TP=1 下的 Remote Fetch 完成、BlockManager 原子注册、Scheduler 唤醒、取消隔离与 Prefill 回退
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
-- [ ] Remote Fetch 完成后唤醒调度器，并正确处理 Request Cancellation
+- [ ] 自动 Remote Write-Back 与 Prefix Catalog 持久化重建
+- [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
 - [ ] 在统一模型、硬件、请求到达率和 Prompt 分布下完成 GPU Baseline 与 Ablation
 - [ ] 报告 TTFT/TPOT p50/p95/p99、SLO Goodput、各级命中率、传输字节数和重计算 Token
 
@@ -287,6 +301,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [分层 Radix 与 Mooncake 设计](docs/hierarchical_radix_mooncake_zh.md)
 - [异步 KV 传输状态机设计](docs/async_kv_transfer_zh.md)
 - [KV Page 数据面与稳定 Envelope](docs/kv_page_data_plane_zh.md)
+- [Remote KV Restore 与 Scheduler 唤醒闭环](docs/remote_restore_scheduler_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

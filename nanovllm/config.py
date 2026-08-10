@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+
 from transformers import AutoConfig
 
 
@@ -24,6 +25,12 @@ class Config:
     qos_prefill_ms_per_token: float = 0.05
     qos_decode_ms_per_token: float = 5.0
     qos_ewma_alpha: float = 0.2
+    kv_cache_model_id: str | None = None
+    kv_cache_model_revision: str = "local"
+    remote_kv_cost_aware: bool = True
+    remote_kv_bandwidth_gbps: float = 12.5
+    remote_kv_fixed_latency_ms: float = 0.3
+    remote_kv_congestion_multiplier: float = 1.0
 
     def __post_init__(self):
         assert os.path.isdir(self.model)
@@ -37,5 +44,15 @@ class Config:
         assert self.qos_prefill_ms_per_token > 0
         assert self.qos_decode_ms_per_token > 0
         assert 0 < self.qos_ewma_alpha <= 1
+        assert self.kv_cache_model_revision
+        assert self.remote_kv_bandwidth_gbps > 0
+        assert self.remote_kv_fixed_latency_ms >= 0
+        assert self.remote_kv_congestion_multiplier >= 1
         self.hf_config = AutoConfig.from_pretrained(self.model)
+        if self.kv_cache_model_id is None:
+            self.kv_cache_model_id = getattr(
+                self.hf_config,
+                "_name_or_path",
+                self.model,
+            )
         self.max_model_len = min(self.max_model_len, self.hf_config.max_position_embeddings)

@@ -1,24 +1,44 @@
 import atexit
 from dataclasses import fields
 from time import perf_counter
+
+import torch.multiprocessing as mp
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
-import torch.multiprocessing as mp
 
 from nanovllm.config import Config
-from nanovllm.sampling_params import SamplingParams
-from nanovllm.engine.sequence import Sequence
-from nanovllm.engine.qos import RequestQoS
-from nanovllm.engine.scheduler import Scheduler
+from nanovllm.engine.hierarchical_cache import (
+    CacheTier,
+    KVCacheGeometry,
+    KVTransferPlanner,
+    StorageTierProfile,
+)
 from nanovllm.engine.model_runner import ModelRunner
+from nanovllm.engine.qos import RequestQoS
+from nanovllm.engine.remote_restore import (
+    RemoteKVRestoreService,
+    RemotePageDescriptor,
+    RemotePrefixCatalog,
+)
+from nanovllm.engine.scheduler import Scheduler
+from nanovllm.engine.sequence import Sequence
+from nanovllm.engine.storage_backend import KVCacheIdentity, make_kv_page_key
+from nanovllm.sampling_params import SamplingParams
 
 
 class LLMEngine:
 
     def __init__(self, model, **kwargs):
+        kv_storage_backend = kwargs.pop("kv_storage_backend", None)
+        remote_prefix_catalog = kwargs.pop("remote_prefix_catalog", None)
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+        if kv_storage_backend is not None and config.tensor_parallel_size != 1:
+            raise ValueError(
+                "automatic remote KV restore currently requires "
+                "tensor_parallel_size=1"
+            )
         Sequence.block_size = config.kvcache_block_size
         self.ps = []
         self.events = []
@@ -32,14 +52,122 @@ class LLMEngine:
         self.model_runner = ModelRunner(config, 0, self.events)
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         config.eos = self.tokenizer.eos_token_id
-        self.scheduler = Scheduler(config)
+        self.kv_cache_identity = KVCacheIdentity(
+            model_id=config.kv_cache_model_id,
+            model_revision=config.kv_cache_model_revision,
+            dtype=self.model_runner.kv_page_io.layout.dtype,
+            tp_size=config.tensor_parallel_size,
+            page_size=config.kvcache_block_size,
+        )
+        self.remote_restore_service = None
+        if kv_storage_backend is not None:
+            layout = self.model_runner.kv_page_io.layout
+            planner = None
+            if config.remote_kv_cost_aware:
+                dtype_bytes = layout.nbytes // (
+                    2
+                    * layout.num_layers
+                    * layout.block_size
+                    * layout.num_kv_heads
+                    * layout.head_dim
+                )
+                planner = KVTransferPlanner(
+                    KVCacheGeometry(
+                        num_layers=layout.num_layers,
+                        num_kv_heads=layout.num_kv_heads,
+                        head_dim=layout.head_dim,
+                        dtype_bytes=dtype_bytes,
+                    ),
+                    {
+                        CacheTier.MOONCAKE: StorageTierProfile(
+                            bandwidth_gbps=config.remote_kv_bandwidth_gbps,
+                            fixed_latency_ms=config.remote_kv_fixed_latency_ms,
+                            congestion_multiplier=(
+                                config.remote_kv_congestion_multiplier
+                            ),
+                        )
+                    },
+                )
+            self.remote_restore_service = RemoteKVRestoreService(
+                kv_storage_backend,
+                catalog=remote_prefix_catalog or RemotePrefixCatalog(),
+                planner=planner,
+            )
+        self.scheduler = Scheduler(
+            config,
+            remote_restore_service=self.remote_restore_service,
+        )
+        self.config = config
+        self._exited = False
         atexit.register(self.exit)
 
     def exit(self):
+        if self._exited:
+            return
+        self._exited = True
+        if self.remote_restore_service is not None:
+            self.remote_restore_service.close()
         self.model_runner.call("exit")
         del self.model_runner
         for p in self.ps:
             p.join()
+
+    def register_remote_prefix(self, token_ids, envelopes, timeout=None):
+        if self.remote_restore_service is None:
+            raise RuntimeError("LLMEngine was created without kv_storage_backend")
+        block_size = self.config.kvcache_block_size
+        envelopes = tuple(envelopes)
+        if not envelopes:
+            raise ValueError("at least one remote KV page is required")
+        required_tokens = len(envelopes) * block_size
+        if len(token_ids) < required_tokens:
+            raise ValueError("token_ids do not contain every published KV page")
+
+        block_keys = tuple(
+            tuple(token_ids[index * block_size:(index + 1) * block_size])
+            for index in range(len(envelopes))
+        )
+        descriptors = tuple(
+            RemotePageDescriptor(
+                object_key=make_kv_page_key(
+                    self.kv_cache_identity,
+                    tp_rank=0,
+                    page_index=index,
+                    prefix_token_ids=token_ids[:(index + 1) * block_size],
+                ),
+                identity_digest=self.kv_cache_identity.digest,
+                tp_rank=0,
+                page_index=index,
+            )
+            for index in range(len(envelopes))
+        )
+        self.remote_restore_service.publish_prefix(
+            block_keys,
+            descriptors,
+            envelopes,
+            timeout=timeout,
+        )
+        return descriptors
+
+    def _process_ready_remote_restores(self):
+        for state in self.scheduler.ready_remote_restores():
+            try:
+                envelopes = state.transfer.result()
+                for page, block_id, envelope in zip(
+                    state.transfer.pages,
+                    state.transfer.block_ids,
+                    envelopes,
+                ):
+                    self.model_runner.call(
+                        "import_kv_page",
+                        block_id,
+                        envelope,
+                        page.identity_digest,
+                        page.page_index,
+                    )
+                self.scheduler.complete_remote_restore(state.sequence.seq_id)
+            except Exception as exc:  # noqa: BLE001 - remote failures fall back to prefill
+                self.scheduler.fail_remote_restore(state.sequence.seq_id, exc)
 
     def add_request(
         self,
@@ -54,7 +182,17 @@ class LLMEngine:
         return seq.seq_id
 
     def step(self):
-        seqs, is_prefill = self.scheduler.schedule()
+        while True:
+            self._process_ready_remote_restores()
+            seqs, is_prefill = self.scheduler.schedule()
+            if seqs:
+                break
+            if not self.scheduler.has_pending_restores:
+                raise RuntimeError("scheduler produced no runnable requests")
+            self.remote_restore_service.wait_for_any(
+                state.transfer
+                for state in self.scheduler.pending_restores.values()
+            )
         num_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else -len(seqs)
         started = perf_counter()
         token_ids = self.model_runner.call("run", seqs, is_prefill)

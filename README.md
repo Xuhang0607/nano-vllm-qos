@@ -21,13 +21,13 @@ placement when interactive and batch requests have different latency budgets?
 
 The current milestone implements a priority-aware latency-budget scheduler
 (PALS), a page-aligned Radix prefix index, a GPU/CPU/Mooncake cache planning
-model, and a Mooncake byte-store adapter. FCFS and hash-prefix policies remain
-available as baselines, so every optimization can be compared instead of only
-demonstrated in isolation.
+model, a versioned KV page data plane, and automatic single-rank remote restore.
+FCFS and hash-prefix policies remain available as baselines, so every
+optimization can be compared instead of only demonstrated in isolation.
 
 > The checked-in performance numbers are deterministic control-plane simulator
-> results, not GPU throughput measurements. The real remote GPU KV data path is
-> explicitly listed as future work.
+> results, not GPU throughput measurements. GPU page round-trip correctness is
+> validated separately; real Mooncake end-to-end performance is still future work.
 
 ## Motivation
 
@@ -59,13 +59,14 @@ flowchart LR
     H -. metadata lookup .-> K[Mooncake store]
     J --> L[Transfer-vs-recompute planner]
     K --> L
-    L -. planned restore .-> I
+    L --> N[WAITING_FOR_KV / background GET]
+    N --> I
     I --> M[ModelRunner / Attention / Sampling]
 ```
 
-Solid lines are integrated into nano-vLLM's scheduling and local block
-management path. Dashed lines represent the hierarchical control plane; moving
-real model KV tensors between tiers is not integrated yet.
+The single-rank remote-restore path is integrated from prefix lookup through
+GPU page import and scheduler wakeup. Automatic write-back, persistent catalog
+recovery, transfer/compute overlap, and tensor-parallel restore remain future work.
 
 ## What Is Implemented
 
@@ -80,7 +81,7 @@ real model KV tensors between tiers is not integrated yet.
 | Mooncake adapter | Byte object and batch operations, stable KV page identity, fake-store tests, and TCP smoke script | Adapter implemented |
 | Async transfer coordination | Per-key state machine, duplicate-fetch coalescing, cancellation isolation, retryable failures, and ordered Fetch/Write/Evict operations | Control-plane prototype |
 | KV page data plane | Versioned/checksummed envelope, layout compatibility checks, pinned CPU staging, and physical Tensor page export/restore | Rank-local primitive implemented |
-| Automatic remote restore | Scheduler blocking/wakeup, BlockManager registration, transfer/compute overlap, and TP-rank orchestration | Roadmap |
+| Automatic remote restore | `WAITING_FOR_KV`, block reservation, background GET, main-thread GPU import, atomic Radix commit, wakeup, and prefill fallback | Integrated for TP=1 |
 
 ## Core Design
 
@@ -178,7 +179,21 @@ BLAKE2b checksum.
 `ModelRunner` exposes rank-local export/import primitives. Import validates the
 consumer identity and actual KV cache layout before copying bytes into a newly
 allocated physical block. The current primitive synchronizes at the API
-boundary; scheduler-driven asynchronous restore remains future work.
+boundary; scheduler orchestration is described below, while transfer/compute
+overlap remains future work.
+
+### 6. Scheduler-Driven Remote Restore
+
+With a configured `kv_storage_backend`, a remote prefix longer than the local
+match is evaluated by the transfer-vs-recompute planner. Accepted requests
+reserve physical blocks and enter `WAITING_FOR_KV`. Backend GETs run on a
+dedicated asyncio loop, while CUDA imports remain on the main inference thread.
+
+Only after every page is validated and restored does `BlockManager` atomically
+publish the prefix to the local Radix index and wake the request. Missing or
+invalid pages release all reservations and requeue the request for local
+prefill. Concurrent requests share backend reads through the transfer
+coordinator.
 
 ## Reproduce the Control-Plane Experiments
 
@@ -244,7 +259,7 @@ print(outputs[0]["text"])
 ## Optional Mooncake Smoke Test
 
 On a supported Linux environment, install the optional dependency and validate
-the adapter before integrating GPU KV tensors:
+the backend adapter before running an end-to-end remote restore:
 
 ```bash
 python -m pip install -e ".[mooncake]"
@@ -267,6 +282,7 @@ RDMA, and GPU tensor movement have not been validated on Windows.
 | `nanovllm/engine/storage_backend.py` | In-memory and Mooncake KV object adapters |
 | `nanovllm/engine/transfer_coordinator.py` | Async KV state machine, request coalescing, and per-key I/O ordering |
 | `nanovllm/engine/kv_page.py` | Stable page envelope, Torch page movement, and async storage bridge |
+| `nanovllm/engine/remote_restore.py` | Remote prefix catalog, background I/O service, and pending restore batches |
 | `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
@@ -282,8 +298,10 @@ design.
 - [x] Mooncake object adapter and deterministic benchmarks
 - [x] Deduplicated asynchronous fetch/write/evict state machine
 - [x] Versioned real K/V page serialization and synchronous CPU <-> GPU restore primitive
+- [x] Remote-fetch completion, atomic BlockManager registration, scheduler wakeup, cancellation isolation, and prefill fallback for TP=1
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
-- [ ] Connect remote-fetch completion to scheduler wakeup and cancellation
+- [ ] Automatic remote write-back and persistent prefix-catalog reconstruction
+- [ ] Tensor-parallel shard restore and cross-rank completion synchronization
 - [ ] Run GPU baselines and ablations with fixed model, hardware, request rate, and prompt distribution
 - [ ] Report TTFT/TPOT p50/p95/p99, SLO goodput, cache hit rate, transfer bytes, and recomputed tokens
 
@@ -296,6 +314,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [Hierarchical Radix and Mooncake design (Chinese)](docs/hierarchical_radix_mooncake_zh.md)
 - [Asynchronous KV transfer state machine (Chinese)](docs/async_kv_transfer_zh.md)
 - [KV page data plane and stable envelope (Chinese)](docs/kv_page_data_plane_zh.md)
+- [Remote restore and scheduler wakeup (Chinese)](docs/remote_restore_scheduler_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements
