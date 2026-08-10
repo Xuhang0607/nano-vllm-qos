@@ -23,7 +23,8 @@ The current milestone implements a priority-aware latency-budget scheduler
 (PALS), a page-aligned Radix prefix index, a GPU/CPU/Mooncake cache planning
 model, a versioned KV page data plane, and automatic single-rank remote restore.
 The same single-rank path now writes newly completed KV pages back to remote
-storage without blocking backend I/O on the inference thread.
+storage without blocking backend I/O on the inference thread. A versioned,
+checksummed catalog snapshot makes those prefixes discoverable after restart.
 FCFS and hash-prefix policies remain available as baselines, so every
 optimization can be compared instead of only demonstrated in isolation.
 
@@ -66,12 +67,15 @@ flowchart LR
     I --> M[ModelRunner / Attention / Sampling]
     I --> O[Safe-point export / background PUT]
     O --> K
+    K --> P[Persistent catalog snapshot]
+    P -. startup rebuild .-> H
 ```
 
 The single-rank remote-restore path is integrated from prefix lookup through
 GPU page import and scheduler wakeup. Automatic write-back is also integrated
-for newly completed pages. Persistent catalog recovery, transfer/compute
-overlap, and tensor-parallel restore remain future work.
+for newly completed pages, with persistent catalog recovery for a single
+writer. Multi-replica consistency, transfer/compute overlap, and tensor-parallel
+restore remain future work.
 
 ## What Is Implemented
 
@@ -88,6 +92,7 @@ overlap, and tensor-parallel restore remain future work.
 | KV page data plane | Versioned/checksummed envelope, layout compatibility checks, pinned CPU staging, and physical Tensor page export/restore | Rank-local primitive implemented |
 | Automatic remote restore | `WAITING_FOR_KV`, block reservation, background GET, main-thread GPU import, atomic Radix commit, wakeup, and prefill fallback | Integrated for TP=1 |
 | Automatic remote write-back | Safe-point GPU export, background PUT, per-page write coalescing, failure isolation, and atomic remote-catalog publication | Integrated for TP=1 |
+| Persistent remote catalog | Versioned/checksummed snapshot, identity-scoped object key, asynchronous saves, startup Radix reconstruction, and corrupt-snapshot fallback | Integrated for single-writer restart recovery |
 
 ## Core Design
 
@@ -214,6 +219,20 @@ prefix is added to `RemotePrefixCatalog` only after every required PUT succeeds.
 Export or storage failures are recorded as cache-optimization failures and do
 not fail token generation. Pending writes are flushed during engine shutdown.
 
+### 8. Persistent Catalog Recovery
+
+KV page objects are not useful after restart unless a new engine can rediscover
+their token-prefix mapping. Each model identity and TP rank therefore owns a
+stable catalog object. The snapshot stores logical token-block paths and remote
+page descriptors, never process-local Radix handles or physical GPU block IDs.
+
+Catalog saves are ordered behind successful page PUTs and run asynchronously.
+Normal shutdown flushes pending snapshots. Startup validates schema, version,
+identity, and checksum before rebuilding the Radix index through its canonical
+insert path. Missing or corrupt metadata falls back to an empty catalog without
+failing inference. The current whole-snapshot protocol assumes one writer;
+concurrent replicas still require backend CAS or transactional metadata.
+
 ## Reproduce the Control-Plane Experiments
 
 The control-plane suite does not require model weights or a CUDA GPU:
@@ -301,6 +320,7 @@ RDMA, and GPU tensor movement have not been validated on Windows.
 | `nanovllm/engine/storage_backend.py` | In-memory and Mooncake KV object adapters |
 | `nanovllm/engine/transfer_coordinator.py` | Async KV state machine, request coalescing, and per-key I/O ordering |
 | `nanovllm/engine/kv_page.py` | Stable page envelope, Torch page movement, and async storage bridge |
+| `nanovllm/engine/remote_catalog.py` | Versioned persistent-catalog snapshot schema and codec |
 | `nanovllm/engine/remote_restore.py` | Remote prefix catalog, background I/O service, and restore/write-back batches |
 | `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
@@ -319,8 +339,9 @@ design.
 - [x] Versioned real K/V page serialization and synchronous CPU <-> GPU restore primitive
 - [x] Remote-fetch completion, atomic BlockManager registration, scheduler wakeup, cancellation isolation, and prefill fallback for TP=1
 - [x] Safe-point automatic remote write-back, duplicate-PUT coalescing, failure isolation, and atomic catalog publication for TP=1
+- [x] Versioned persistent catalog snapshot and single-writer reconstruction across process restarts
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
-- [ ] Persistent prefix-catalog reconstruction across process restarts and serving replicas
+- [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
 - [ ] Run GPU baselines and ablations with fixed model, hardware, request rate, and prompt distribution
 - [ ] Report TTFT/TPOT p50/p95/p99, SLO goodput, cache hit rate, transfer bytes, and recomputed tokens
@@ -336,6 +357,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [KV page data plane and stable envelope (Chinese)](docs/kv_page_data_plane_zh.md)
 - [Remote restore and scheduler wakeup (Chinese)](docs/remote_restore_scheduler_zh.md)
 - [Automatic remote write-back (Chinese)](docs/remote_writeback_zh.md)
+- [Persistent remote catalog (Chinese)](docs/persistent_catalog_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements

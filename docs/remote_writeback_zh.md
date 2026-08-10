@@ -150,7 +150,10 @@ Write-Back 失败时本地计算已经成功，只是失去未来的远端复用
 
 仍需继续完成：
 
-1. Catalog 的持久化、服务重启重建与多实例一致性；
+1. 基于 Backend CAS 或事务元数据的多实例 Catalog 一致性；
 2. TP>1 下各 Rank 的 Shard Write-Back 和完成 Barrier；
 3. 独立 CUDA Stream/Event 与异步 D2H Pipeline；
 4. 真实 Mooncake TCP/RDMA 环境下的 TTFT、带宽、命中率和重计算 Token 对比。
+
+单写者 Catalog 持久化和服务重启重建已经实现，详见
+[Remote Catalog 持久化设计](persistent_catalog_zh.md)。

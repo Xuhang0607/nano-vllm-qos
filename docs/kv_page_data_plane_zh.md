@@ -215,7 +215,7 @@ python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 
 仍需完成：
 
-1. Remote Prefix Catalog 持久化与服务重启重建。
+1. 多实例 Remote Prefix Catalog 的 CAS/事务一致性。
 2. Tensor Parallel 下每个 Rank 独立读写自己的 Shard，并进行跨 Rank 完成同步。
 3. 使用独立 CUDA Stream 与 Event 实现传输/计算重叠。
 4. 接入真实 Mooncake 进程并测量 TTFT、带宽与 Crossover Point。

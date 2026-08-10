@@ -218,3 +218,15 @@ def make_kv_page_key(
         f"{namespace}/{identity.digest}/tp-{tp_rank}/page-{page_index}/"
         f"{prefix_digest.hexdigest()}"
     )
+
+
+def make_kv_catalog_key(
+    identity: KVCacheIdentity,
+    tp_rank: int,
+    namespace: str = "nanovllm-kv",
+):
+    if not namespace:
+        raise ValueError("namespace must not be empty")
+    if not 0 <= tp_rank < identity.tp_size:
+        raise ValueError("tp_rank is outside the cache identity")
+    return f"{namespace}/{identity.digest}/tp-{tp_rank}/catalog-v1"

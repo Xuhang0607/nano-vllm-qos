@@ -86,7 +86,8 @@ Descriptor 保存：
 
 Catalog 只发布已经成功写入 Backend 的 Prefix。重复注册同一 Token Prefix 时保留第一条 Canonical Path，避免多个对象描述争夺同一逻辑前缀。
 
-当前 Catalog 位于内存中。真实服务重启后的 Catalog 重建、持久化和多实例一致性仍属于后续工作。
+Catalog 已支持版本化快照和单写者服务重启重建，详见
+[Remote Catalog 持久化设计](persistent_catalog_zh.md)。多实例并发更新的一致性仍属于后续工作。
 
 ## 5. 调度步骤
 
@@ -210,7 +211,7 @@ Remote I/O 级：
 本阶段完成的是 **TP=1 下的自动 Remote Restore**。自动 Write-Back 已在后续阶段接入，
 详见[自动 Remote Write-Back 设计](remote_writeback_zh.md)。仍需继续：
 
-1. 持久化 Remote Prefix Catalog，并支持服务重启与多实例一致性。
+1. 基于 Backend CAS 或事务元数据实现多实例 Remote Prefix Catalog 一致性。
 2. TP>1 时每个 Rank 独立恢复自己的 KV Shard，并进行完成 Barrier。
 3. 独立 CUDA Stream/Event，让 Page Import 与其他请求计算重叠。
 4. 真实 Mooncake 进程端到端测试与 GPU 性能测量。

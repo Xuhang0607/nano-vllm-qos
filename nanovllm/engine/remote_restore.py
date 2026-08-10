@@ -1,10 +1,17 @@
 import asyncio
+from collections import deque
 from concurrent.futures import FIRST_COMPLETED, Future, wait
 from dataclasses import dataclass
 from threading import Event, Thread
 
 from nanovllm.engine.hierarchical_cache import CacheTier
 from nanovllm.engine.radix_cache import BlockKey, RadixPrefixCache
+from nanovllm.engine.remote_catalog import (
+    CatalogPageRecord,
+    CatalogPrefixRecord,
+    RemoteCatalogSnapshot,
+    RemoteCatalogSnapshotCodec,
+)
 from nanovllm.engine.transfer_coordinator import AsyncKVTransferCoordinator
 
 
@@ -176,6 +183,58 @@ class RemotePrefixCatalog:
         handles = self.index.match(tuple(block_keys))
         return tuple(self.descriptors[handle] for handle in handles)
 
+    def snapshot(self) -> RemoteCatalogSnapshot | None:
+        if self._identity is None:
+            return None
+
+        prefixes = []
+
+        def visit(node, parent_keys=(), parent_handles=()):
+            block_keys = parent_keys + node.edge_keys
+            handles = parent_handles + node.block_ids
+            if node is not self.index.root and not node.children:
+                pages = tuple(
+                    CatalogPageRecord(
+                        object_key=self.descriptors[handle].object_key,
+                        identity_digest=self.descriptors[handle].identity_digest,
+                        tp_rank=self.descriptors[handle].tp_rank,
+                        page_index=self.descriptors[handle].page_index,
+                    )
+                    for handle in handles
+                )
+                prefixes.append(CatalogPrefixRecord(block_keys, pages))
+                return
+            for child in sorted(
+                node.children.values(),
+                key=lambda item: item.edge_keys,
+            ):
+                visit(child, block_keys, handles)
+
+        visit(self.index.root)
+        identity_digest, tp_rank = self._identity
+        return RemoteCatalogSnapshot(
+            identity_digest=identity_digest,
+            tp_rank=tp_rank,
+            prefixes=tuple(prefixes),
+        )
+
+    def merge_snapshot(self, snapshot: RemoteCatalogSnapshot) -> int:
+        identity = (snapshot.identity_digest, snapshot.tp_rank)
+        if self._identity is not None and identity != self._identity:
+            raise ValueError("snapshot identity does not match the existing catalog")
+        for prefix in snapshot.prefixes:
+            descriptors = tuple(
+                RemotePageDescriptor(
+                    object_key=page.object_key,
+                    identity_digest=page.identity_digest,
+                    tp_rank=page.tp_rank,
+                    page_index=page.page_index,
+                )
+                for page in prefix.pages
+            )
+            self.register(prefix.block_keys, descriptors)
+        return len(snapshot.prefixes)
+
     def validate(self):
         self.index.validate()
         assert set(self.descriptors) == set(self.index.block_locations)
@@ -184,10 +243,43 @@ class RemotePrefixCatalog:
 class RemoteKVRestoreService:
     """Run deduplicated backend I/O without moving CUDA work off the main thread."""
 
-    def __init__(self, backend, catalog=None, planner=None):
+    def __init__(
+        self,
+        backend,
+        catalog=None,
+        planner=None,
+        catalog_key=None,
+        catalog_identity=None,
+        catalog_timeout_s=10.0,
+    ):
+        if catalog_key is not None and (
+            not isinstance(catalog_key, str) or not catalog_key
+        ):
+            raise ValueError("persistent catalog key must not be empty")
+        if catalog_identity is not None:
+            if (
+                not isinstance(catalog_identity, (tuple, list))
+                or len(catalog_identity) != 2
+            ):
+                raise ValueError("persistent catalog identity is invalid")
+            identity_digest, tp_rank = catalog_identity
+            if (
+                not isinstance(identity_digest, str)
+                or not identity_digest
+                or not isinstance(tp_rank, int)
+                or isinstance(tp_rank, bool)
+                or tp_rank < 0
+            ):
+                raise ValueError("persistent catalog identity is invalid")
+            catalog_identity = (identity_digest, tp_rank)
+        if catalog_timeout_s <= 0:
+            raise ValueError("persistent catalog timeout must be positive")
         self.catalog = catalog or RemotePrefixCatalog()
         self.planner = planner
         self._backend = backend
+        self._catalog_key = catalog_key
+        self._catalog_identity = catalog_identity
+        self._catalog_timeout_s = catalog_timeout_s
         self._loop = asyncio.new_event_loop()
         self._ready = Event()
         self._thread = Thread(
@@ -197,6 +289,8 @@ class RemoteKVRestoreService:
         )
         self._closed = False
         self._inflight_writes: dict[str, Future] = {}
+        self._pending_catalog_saves: list[Future] = []
+        self.catalog_errors = deque(maxlen=128)
         self._writeback_metrics = {
             "writeback_submitted": 0,
             "writeback_completed": 0,
@@ -205,9 +299,19 @@ class RemoteKVRestoreService:
             "writeback_pages": 0,
             "writeback_coalesced_pages": 0,
         }
+        self._catalog_metrics = {
+            "catalog_loads": 0,
+            "catalog_load_failed": 0,
+            "catalog_loaded_prefixes": 0,
+            "catalog_save_submitted": 0,
+            "catalog_save_completed": 0,
+            "catalog_save_failed": 0,
+        }
         self._thread.start()
         if not self._ready.wait(timeout=5):
             raise RuntimeError("remote KV restore event loop did not start")
+        if self._catalog_key is not None:
+            self._load_persistent_catalog()
 
     def _run_loop(self):
         asyncio.set_event_loop(self._loop)
@@ -220,6 +324,58 @@ class RemoteKVRestoreService:
             coroutine.close()
             raise RuntimeError("remote KV restore service is closed")
         return asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+
+    def _record_catalog_failure(self, operation, exc):
+        self._catalog_metrics[f"catalog_{operation}_failed"] += 1
+        self.catalog_errors.append(f"{type(exc).__name__}: {exc}")
+
+    def _load_persistent_catalog(self):
+        self._catalog_metrics["catalog_loads"] += 1
+        try:
+            future = self._submit(self._coordinator.get(self._catalog_key))
+            envelope = future.result(timeout=self._catalog_timeout_s)
+            if envelope is None:
+                return
+            snapshot = RemoteCatalogSnapshotCodec.decode(envelope)
+            identity = (snapshot.identity_digest, snapshot.tp_rank)
+            if self._catalog_identity is not None and identity != self._catalog_identity:
+                raise ValueError("persistent catalog identity does not match this engine")
+            restored = self.catalog.merge_snapshot(snapshot)
+            self._catalog_metrics["catalog_loaded_prefixes"] += restored
+        except Exception as exc:  # noqa: BLE001 - cache metadata load is optional
+            self._record_catalog_failure("load", exc)
+
+    def _schedule_catalog_save(self):
+        if self._catalog_key is None:
+            return
+        try:
+            snapshot = self.catalog.snapshot()
+            if snapshot is None:
+                return
+            identity = (snapshot.identity_digest, snapshot.tp_rank)
+            if self._catalog_identity is not None and identity != self._catalog_identity:
+                raise ValueError("persistent catalog identity does not match this engine")
+            envelope = RemoteCatalogSnapshotCodec.encode(snapshot)
+            future = self._submit(
+                self._coordinator.put(self._catalog_key, envelope)
+            )
+            self._pending_catalog_saves.append(future)
+            self._catalog_metrics["catalog_save_submitted"] += 1
+        except Exception as exc:  # noqa: BLE001 - cache metadata save is optional
+            self._record_catalog_failure("save", exc)
+
+    def flush_catalog_saves(self, wait_for_all=False, timeout=None):
+        timeout = self._catalog_timeout_s if timeout is None else timeout
+        for future in tuple(self._pending_catalog_saves):
+            if not wait_for_all and not future.done():
+                continue
+            try:
+                future.result(timeout=timeout if wait_for_all else None)
+                self._catalog_metrics["catalog_save_completed"] += 1
+            except Exception as exc:  # noqa: BLE001 - cache metadata save is optional
+                self._record_catalog_failure("save", exc)
+            finally:
+                self._pending_catalog_saves.remove(future)
 
     def publish_prefix(self, block_keys, descriptors, envelopes, timeout=None):
         block_keys = tuple(block_keys)
@@ -236,9 +392,11 @@ class RemoteKVRestoreService:
         for future in futures:
             future.result(timeout=timeout)
         self.catalog.register(block_keys, descriptors)
+        self._schedule_catalog_save()
 
     def register_existing_prefix(self, block_keys, descriptors):
         self.catalog.register(block_keys, descriptors)
+        self._schedule_catalog_save()
 
     def pages_requiring_write(self, block_keys, descriptors) -> tuple[int, ...]:
         block_keys = tuple(block_keys)
@@ -314,6 +472,7 @@ class RemoteKVRestoreService:
     def complete_writeback(self, pending: PendingRemoteWriteback, timeout=None):
         pending.result(timeout=timeout)
         self.catalog.register(pending.block_keys, pending.pages)
+        self._schedule_catalog_save()
         for page, future in zip(pending.write_pages, pending.futures):
             if self._inflight_writes.get(page.object_key) is future:
                 self._inflight_writes.pop(page.object_key, None)
@@ -386,11 +545,18 @@ class RemoteKVRestoreService:
         wait(futures, timeout=timeout, return_when=FIRST_COMPLETED)
 
     def metrics(self):
-        return self._coordinator.metrics() | self._writeback_metrics.copy()
+        self.flush_catalog_saves()
+        return (
+            self._coordinator.metrics()
+            | self._writeback_metrics.copy()
+            | self._catalog_metrics.copy()
+            | {"catalog_save_pending": len(self._pending_catalog_saves)}
+        )
 
     def close(self):
         if self._closed:
             return
+        self.flush_catalog_saves(wait_for_all=True)
         self._closed = True
         future = asyncio.run_coroutine_threadsafe(
             self._coordinator.close(),

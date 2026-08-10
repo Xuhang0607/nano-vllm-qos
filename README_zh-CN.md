@@ -20,7 +20,8 @@ LLM Serving 问题：当在线请求和批处理请求具有不同的优先级�
 
 当前里程碑已经实现优先级与延迟预算感知调度器 PALS、页对齐 Radix 前缀索引、
 GPU/CPU/Mooncake 分层缓存决策模型、版本化 KV Page 数据面，以及 TP=1 下的自动远端
-恢复和自动远端写回。原有 FCFS 与 Hash Prefix Cache 作为基线保留，便于对每项优化进行可复现的对比。
+恢复、自动远端写回和可重启恢复的持久化 Catalog。原有 FCFS 与 Hash Prefix Cache
+作为基线保留，便于对每项优化进行可复现的对比。
 
 > 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。GPU Page
 > 往返正确性已经单独验证，真实 Mooncake 端到端性能仍属于后续工作。
@@ -59,11 +60,13 @@ flowchart LR
     I --> M[ModelRunner / Attention / Sampling]
     I --> O[安全点导出 / 后台 PUT]
     O --> K
+    K --> P[持久化 Catalog 快照]
+    P -. 启动重建 .-> H
 ```
 
 TP=1 的远端恢复路径已经从 Prefix Lookup 接到 GPU Page Import 与 Scheduler 唤醒。
-新完成 Page 的自动 Write-Back 也已接入。Catalog 持久化重建、传输/计算重叠和 TP 多
-Rank 恢复仍属于后续工作。
+新完成 Page 的自动 Write-Back 和单写者 Catalog 重启恢复也已接入。多实例一致性、
+传输/计算重叠和 TP 多 Rank 恢复仍属于后续工作。
 
 ## 已实现内容
 
@@ -80,6 +83,7 @@ Rank 恢复仍属于后续工作。
 | KV Page 数据面 | 版本化/带校验 Envelope、布局兼容检查、Pinned CPU Staging 与真实 Tensor Page 导出/恢复 | Rank-Local 原语已实现 |
 | 自动远端恢复 | `WAITING_FOR_KV`、Block 预留、后台 GET、主线程 GPU Import、Radix 原子提交、唤醒与 Prefill 回退 | TP=1 已接入 |
 | 自动远端写回 | 安全点 GPU Export、后台 PUT、Page 级写入合并、失败隔离与 Remote Catalog 原子发布 | TP=1 已接入 |
+| Remote Catalog 持久化 | 版本化/带校验快照、身份隔离对象 Key、异步保存、启动 Radix 重建与损坏快照回退 | 单写者重启恢复已接入 |
 
 ## 核心设计
 
@@ -189,6 +193,17 @@ Coordinator 共享 Backend Read。
 都成功后，系统才把它发布到 `RemotePrefixCatalog`。导出或存储失败只会记录为缓存优化
 失败，不会中断 Token 生成；引擎退出时会刷新仍在执行的写回批次。
 
+### 8. Catalog 持久化与重启恢复
+
+只有 KV Page 对象还不够：服务重启后，新进程还需要知道“哪段 Token Prefix 对应哪些远端
+Page”。系统为每个模型身份和 TP Rank 生成稳定 Catalog Key。快照只保存逻辑 Token Block
+路径与 Remote Page Descriptor，不保存进程内 Radix Handle 或物理 GPU Block ID。
+
+Page PUT 成功后，Catalog 快照在后台按顺序保存；正常退出时强制刷新。新服务启动后会校验
+Schema、Version、模型身份和 Checksum，再通过规范化 Insert 路径重建 Radix。快照缺失或
+损坏时退化为空 Catalog，不影响本地推理。当前 Whole-Snapshot 协议假设只有一个写者；
+多个服务实例并发更新还需要 Backend CAS 或事务元数据支持。
+
 ## 复现控制面实验
 
 控制面测试不需要模型权重和 CUDA GPU：
@@ -271,6 +286,7 @@ RDMA 和 GPU Tensor 数据搬运。
 | `nanovllm/engine/storage_backend.py` | In-Memory 与 Mooncake KV 对象适配器 |
 | `nanovllm/engine/transfer_coordinator.py` | 异步 KV 状态机、并发请求合并与 Key 级 I/O 排序 |
 | `nanovllm/engine/kv_page.py` | 稳定 Page Envelope、Torch Page 搬运与异步存储桥接 |
+| `nanovllm/engine/remote_catalog.py` | 版本化持久化 Catalog 快照格式与编解码 |
 | `nanovllm/engine/remote_restore.py` | Remote Prefix Catalog、后台 I/O 服务与 Restore/Write-Back Batch |
 | `benchmarks/` | 确定性的调度与分层缓存模拟器 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
@@ -288,8 +304,9 @@ RDMA 和 GPU Tensor 数据搬运。
 - [x] 版本化真实 K/V Page 序列化与同步 CPU <-> GPU 恢复原语
 - [x] TP=1 下的 Remote Fetch 完成、BlockManager 原子注册、Scheduler 唤醒、取消隔离与 Prefill 回退
 - [x] TP=1 下的安全点自动 Remote Write-Back、重复 PUT 合并、失败隔离与 Catalog 原子发布
+- [x] 版本化 Catalog 持久化快照与单写者跨进程重启重建
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
-- [ ] 跨进程重启和多服务实例的 Prefix Catalog 持久化重建
+- [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
 - [ ] 在统一模型、硬件、请求到达率和 Prompt 分布下完成 GPU Baseline 与 Ablation
 - [ ] 报告 TTFT/TPOT p50/p95/p99、SLO Goodput、各级命中率、传输字节数和重计算 Token
@@ -318,6 +335,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [KV Page 数据面与稳定 Envelope](docs/kv_page_data_plane_zh.md)
 - [Remote KV Restore 与 Scheduler 唤醒闭环](docs/remote_restore_scheduler_zh.md)
 - [自动 Remote Write-Back 设计](docs/remote_writeback_zh.md)
+- [Remote Catalog 持久化与重启恢复](docs/persistent_catalog_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

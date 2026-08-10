@@ -101,7 +101,7 @@ Mooncake、RDMA 或 GPU 性能数据。
 
 当前仍不能声称“完成 nano-vLLM + Mooncake 分布式推理”。仍需：
 
-1. Remote Prefix Catalog 持久化和多实例一致性；
+1. 多实例 Remote Prefix Catalog 的 CAS/事务一致性；
 2. TP>1 Shard 恢复与跨 Rank 同步；
 3. 独立 CUDA Stream/Event 和注册内存零拷贝路径；
 4. 真实 Mooncake 进程端到端性能验证。

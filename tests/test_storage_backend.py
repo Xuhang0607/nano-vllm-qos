@@ -5,6 +5,7 @@ from nanovllm.engine.storage_backend import (
     KVCacheIdentity,
     MooncakeKVStore,
     MooncakeStoreConfig,
+    make_kv_catalog_key,
     make_kv_page_key,
 )
 
@@ -112,3 +113,13 @@ def test_page_key_rejects_invalid_tokens():
         make_kv_page_key(identity, 0, 0, [-1])
     with pytest.raises(ValueError):
         make_kv_page_key(identity, 1, 0, [1])
+
+
+def test_catalog_key_is_stable_and_isolates_model_and_rank():
+    identity = KVCacheIdentity("model", "main", "bf16", 2, 256)
+    assert make_kv_catalog_key(identity, 0) == make_kv_catalog_key(identity, 0)
+    assert make_kv_catalog_key(identity, 0) != make_kv_catalog_key(identity, 1)
+    other_model = KVCacheIdentity("other", "main", "bf16", 2, 256)
+    assert make_kv_catalog_key(identity, 0) != make_kv_catalog_key(other_model, 0)
+    with pytest.raises(ValueError):
+        make_kv_catalog_key(identity, 2)

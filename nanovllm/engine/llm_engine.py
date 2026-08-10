@@ -24,7 +24,11 @@ from nanovllm.engine.remote_restore import (
 )
 from nanovllm.engine.scheduler import Scheduler
 from nanovllm.engine.sequence import Sequence
-from nanovllm.engine.storage_backend import KVCacheIdentity, make_kv_page_key
+from nanovllm.engine.storage_backend import (
+    KVCacheIdentity,
+    make_kv_catalog_key,
+    make_kv_page_key,
+)
 from nanovllm.sampling_params import SamplingParams
 
 
@@ -94,6 +98,13 @@ class LLMEngine:
                 kv_storage_backend,
                 catalog=remote_prefix_catalog or RemotePrefixCatalog(),
                 planner=planner,
+                catalog_key=(
+                    make_kv_catalog_key(self.kv_cache_identity, tp_rank=0)
+                    if config.remote_kv_persist_catalog
+                    else None
+                ),
+                catalog_identity=(self.kv_cache_identity.digest, 0),
+                catalog_timeout_s=config.remote_kv_catalog_timeout_s,
             )
         self.scheduler = Scheduler(
             config,
@@ -228,6 +239,7 @@ class LLMEngine:
                 )
             finally:
                 self.pending_remote_writebacks.remove(pending)
+        self.remote_restore_service.flush_catalog_saves()
 
     def _process_ready_remote_restores(self):
         for state in self.scheduler.ready_remote_restores():

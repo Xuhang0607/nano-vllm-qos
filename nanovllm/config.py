@@ -33,6 +33,8 @@ class Config:
     remote_kv_congestion_multiplier: float = 1.0
     remote_kv_writeback: bool = True
     remote_kv_min_prefix_blocks: int = 1
+    remote_kv_persist_catalog: bool = True
+    remote_kv_catalog_timeout_s: float = 10.0
 
     def __post_init__(self):
         assert os.path.isdir(self.model)
@@ -51,6 +53,7 @@ class Config:
         assert self.remote_kv_fixed_latency_ms >= 0
         assert self.remote_kv_congestion_multiplier >= 1
         assert self.remote_kv_min_prefix_blocks >= 1
+        assert self.remote_kv_catalog_timeout_s > 0
         self.hf_config = AutoConfig.from_pretrained(self.model)
         if self.kv_cache_model_id is None:
             self.kv_cache_model_id = getattr(

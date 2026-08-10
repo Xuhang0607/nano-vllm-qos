@@ -129,7 +129,7 @@ Envelope 与同步 GPU/CPU 恢复原语已经在 `kv_page.py` 中实现，详见
 详见[自动 Remote Write-Back 设计](remote_writeback_zh.md)。仍未完成的是：
 
 1. 使用独立 CUDA Stream 和 Event 让 CPU/GPU 拷贝与模型计算重叠。
-2. Remote Prefix Catalog 持久化重建。
+2. 多实例并发更新 Remote Prefix Catalog 时的强一致性。
 3. 完整的用户请求取消 API 以及 Finished/Cancelled 指标语义。
 4. Tensor Parallel 下让每个 Rank 读写各自的 KV Shard，并同步完成状态。
 
