@@ -199,6 +199,38 @@ def test_missing_remote_page_releases_blocks_and_falls_back_to_prefill():
         service.close()
 
 
+def test_cancel_pending_remote_restore_releases_reserved_blocks():
+    Sequence.block_size = 2
+    keys, descriptors, envelopes = make_prefix()
+    backend = BlockingGetStore()
+    backend.put_many(dict(zip((page.object_key for page in descriptors), envelopes)))
+    service = RemoteKVRestoreService(backend)
+    try:
+        service.register_existing_prefix(keys, descriptors)
+        scheduler = Scheduler(
+            make_config(),
+            remote_restore_service=service,
+        )
+        sequence = make_sequence()
+        scheduler.add(sequence)
+
+        scheduled, _ = scheduler.schedule()
+        assert scheduled == []
+        assert backend.get_started.wait(timeout=2)
+        assert sequence.status == SequenceStatus.WAITING_FOR_KV
+        assert sequence.block_table
+
+        assert scheduler.cancel(sequence.seq_id)
+        assert sequence.status == SequenceStatus.CANCELLED
+        assert sequence.block_table == []
+        assert not scheduler.pending_restores
+        assert not scheduler.block_manager.used_block_ids
+        assert scheduler.is_finished()
+    finally:
+        backend.allow_get.set()
+        service.close()
+
+
 def test_concurrent_requests_coalesce_remote_page_reads():
     Sequence.block_size = 2
     keys, descriptors, envelopes = make_prefix()

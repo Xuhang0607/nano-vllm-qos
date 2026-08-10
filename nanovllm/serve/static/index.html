@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>nano-vLLM Console</title>
+  <link rel="stylesheet" href="/static/styles.css?v=3">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark">nV</div>
+        <div>
+          <strong>nano-vLLM Console</strong>
+          <div class="runtime-line">
+            <span id="statusDot" class="status-dot"></span>
+            <span id="backendLabel">Connecting</span>
+            <span class="runtime-divider">/</span>
+            <span id="modelLabel">Model</span>
+          </div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="metricsToggle" class="icon-button mobile-only" type="button" title="运行指标" aria-label="运行指标">
+          <i data-lucide="gauge">M</i>
+        </button>
+        <button id="settingsToggle" class="icon-button" type="button" title="请求设置" aria-label="请求设置">
+          <i data-lucide="sliders-horizontal">S</i>
+        </button>
+        <button id="newChatTop" class="command-button" type="button" aria-label="新对话">
+          <i data-lucide="square-pen">+</i><span>新对话</span>
+        </button>
+      </div>
+    </header>
+
+    <aside class="sessions-panel">
+      <div class="panel-heading">
+        <span>对话</span>
+        <button id="newChat" class="icon-button compact" type="button" title="新建对话" aria-label="新建对话">
+          <i data-lucide="plus">+</i>
+        </button>
+      </div>
+      <nav id="sessionList" class="session-list" aria-label="对话记录"></nav>
+      <div class="engine-note">
+        <span id="policyBadge" class="policy-badge">PALS</span>
+        <span>调度策略</span>
+      </div>
+    </aside>
+
+    <main class="chat-workspace">
+      <section id="messageList" class="message-list" aria-live="polite">
+        <div id="emptyState" class="empty-state">
+          <div class="empty-logo">nV</div>
+          <h1>开始本地对话</h1>
+          <p id="emptyModel">nano-vLLM</p>
+        </div>
+      </section>
+
+      <section id="settingsPanel" class="settings-panel" hidden>
+        <div class="setting-row">
+          <label for="temperature">Temperature <output id="temperatureValue">0.8</output></label>
+          <input id="temperature" type="range" min="0.1" max="1.5" step="0.1" value="0.8">
+        </div>
+        <div class="setting-row compact-input">
+          <label for="maxTokens">最大生成 token</label>
+          <input id="maxTokens" type="number" min="1" max="4096" value="256">
+        </div>
+        <div class="setting-row compact-input">
+          <label for="apiKey">API Key</label>
+          <input id="apiKey" type="password" autocomplete="off" placeholder="未启用">
+        </div>
+      </section>
+
+      <form id="composer" class="composer">
+        <div class="composer-toolbar">
+          <span class="toolbar-label">优先级</span>
+          <div id="priorityControl" class="segmented-control" role="radiogroup" aria-label="请求优先级">
+            <button type="button" class="segment active" data-priority="0">普通</button>
+            <button type="button" class="segment" data-priority="5">交互</button>
+            <button type="button" class="segment" data-priority="10">紧急</button>
+          </div>
+          <span id="tokenEstimate" class="token-estimate">0 字符</span>
+        </div>
+        <div class="composer-input-row">
+          <textarea id="promptInput" rows="1" placeholder="输入消息" aria-label="输入消息"></textarea>
+          <button id="sendButton" class="send-button" type="submit" title="发送" aria-label="发送">
+            <i data-lucide="arrow-up">↑</i>
+          </button>
+          <button id="stopButton" class="send-button stop-button" type="button" title="停止生成" aria-label="停止生成" hidden>
+            <i data-lucide="square">■</i>
+          </button>
+        </div>
+      </form>
+    </main>
+
+    <aside id="metricsPanel" class="metrics-panel">
+      <div class="panel-heading metrics-title">
+        <span>运行指标</span>
+        <button id="metricsClose" class="icon-button compact mobile-only" type="button" title="关闭" aria-label="关闭">
+          <i data-lucide="x">×</i>
+        </button>
+      </div>
+      <div class="metric-primary">
+        <span>TTFT</span><strong id="ttftValue">--</strong><small>ms</small>
+      </div>
+      <div class="metric-primary">
+        <span>E2E</span><strong id="e2eValue">--</strong><small>ms</small>
+      </div>
+      <div class="metric-grid">
+        <div><span>输入 token</span><strong id="promptTokensValue">0</strong></div>
+        <div><span>输出 token</span><strong id="completionTokensValue">0</strong></div>
+        <div><span>运行请求</span><strong id="runningValue">0</strong></div>
+        <div><span>等待请求</span><strong id="waitingValue">0</strong></div>
+      </div>
+      <div class="metric-section">
+        <div class="section-label">Prefix cache</div>
+        <div class="cache-rate-row"><strong id="cacheRateValue">0%</strong><span id="cacheBackendValue">radix</span></div>
+        <div class="meter"><span id="cacheRateBar"></span></div>
+        <div class="detail-row"><span>命中块</span><strong id="cacheHitsValue">0</strong></div>
+      </div>
+      <div class="metric-section">
+        <div class="section-label">Remote KV</div>
+        <div class="detail-row"><span>恢复请求</span><strong id="restoreCountValue">0</strong></div>
+        <div class="detail-row"><span>恢复 token</span><strong id="restoreTokensValue">0</strong></div>
+        <div class="detail-row"><span>已取消</span><strong id="cancelledValue">0</strong></div>
+      </div>
+      <div id="requestState" class="request-state">IDLE</div>
+    </aside>
+  </div>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="/static/app.js?v=3"></script>
+</body>
+</html>

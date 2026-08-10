@@ -9,7 +9,7 @@ from nanovllm.engine.qos import (
     RequestQoS,
 )
 from nanovllm.engine.scheduler import Scheduler
-from nanovllm.engine.sequence import Sequence
+from nanovllm.engine.sequence import Sequence, SequenceStatus
 from nanovllm.sampling_params import SamplingParams
 
 
@@ -287,3 +287,34 @@ def test_scheduler_uses_radix_prefix_cache_end_to_end():
     assert second.num_cached_tokens == 4
     assert second.num_scheduled_tokens == 1
     assert scheduler.metrics()["prefix_cache_hit_blocks"] == 2
+
+
+def test_cancel_waiting_request_removes_it_from_scheduler():
+    Sequence.block_size = 4
+    scheduler = Scheduler(make_config("fcfs"), clock=FakeClock())
+    sequence = make_sequence(1)
+    scheduler.add(sequence)
+
+    assert scheduler.cancel(sequence.seq_id)
+    assert sequence.status == SequenceStatus.CANCELLED
+    assert sequence.is_terminal
+    assert not sequence.is_finished
+    assert scheduler.is_finished()
+    assert scheduler.metrics()["cancelled_requests"] == 1
+    assert not scheduler.cancel(sequence.seq_id)
+
+
+def test_cancel_running_request_releases_kv_blocks():
+    Sequence.block_size = 4
+    scheduler = Scheduler(make_config("fcfs"), clock=FakeClock())
+    sequence = make_sequence(1, max_tokens=2)
+    scheduler.add(sequence)
+    scheduled, is_prefill = scheduler.schedule()
+    scheduler.postprocess(scheduled, [99], is_prefill)
+
+    assert sequence.status == SequenceStatus.RUNNING
+    assert sequence.block_table
+    assert scheduler.cancel(sequence.seq_id)
+    assert not sequence.block_table
+    assert not scheduler.block_manager.used_block_ids
+    assert scheduler.is_finished()

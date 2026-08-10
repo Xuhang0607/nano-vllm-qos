@@ -12,6 +12,7 @@ class SequenceStatus(Enum):
     WAITING_FOR_KV = auto()
     RUNNING = auto()
     FINISHED = auto()
+    CANCELLED = auto()
 
 
 class Sequence:
@@ -67,6 +68,10 @@ class Sequence:
         return self.status == SequenceStatus.FINISHED
 
     @property
+    def is_terminal(self):
+        return self.status in (SequenceStatus.FINISHED, SequenceStatus.CANCELLED)
+
+    @property
     def num_completion_tokens(self):
         return self.num_tokens - self.num_prompt_tokens
 
@@ -107,6 +112,12 @@ class Sequence:
             self.first_token_time = perf_counter() if now is None else now
 
     def mark_finished(self, now: float):
+        self.finished_time = now
+
+    def cancel(self, now: float):
+        if self.is_terminal:
+            return
+        self.status = SequenceStatus.CANCELLED
         self.finished_time = now
 
     def begin_remote_restore(self, now: float):

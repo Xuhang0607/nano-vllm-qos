@@ -54,6 +54,7 @@ class Scheduler:
         self.remote_restore_started = 0
         self.remote_restore_completed = 0
         self.remote_restore_failed = 0
+        self.cancelled_requests = 0
 
     def is_finished(self):
         return not self.waiting and not self.running and not self.pending_restores
@@ -61,6 +62,30 @@ class Scheduler:
     def add(self, seq: Sequence):
         seq.mark_arrived(self.step_id, self.clock())
         self.waiting.append(seq)
+
+    def cancel(self, seq_id: int) -> bool:
+        """Cancel a queued request and release every KV block it owns."""
+        seq = next((item for item in self.waiting if item.seq_id == seq_id), None)
+        if seq is not None:
+            self.waiting.remove(seq)
+        else:
+            seq = next((item for item in self.running if item.seq_id == seq_id), None)
+            if seq is not None:
+                self.running.remove(seq)
+            else:
+                state = self.pending_restores.pop(seq_id, None)
+                if state is None:
+                    return False
+                seq = state.sequence
+                state.transfer.cancel_waiters()
+
+        self.block_manager.pending_matches.pop(seq_id, None)
+        if seq.block_table:
+            self.block_manager.deallocate(seq)
+        seq.num_scheduled_tokens = 0
+        seq.cancel(self.clock())
+        self.cancelled_requests += 1
+        return True
 
     def _start_remote_restore(
         self,
@@ -251,6 +276,9 @@ class Scheduler:
             "remote_restore_completed": self.remote_restore_completed,
             "remote_restore_failed": self.remote_restore_failed,
             "remote_restore_pending": len(self.pending_restores),
+            "cancelled_requests": self.cancelled_requests,
+            "waiting_requests": len(self.waiting),
+            "running_requests": len(self.running),
         })
         if self.remote_restore_service is not None:
             result.update({

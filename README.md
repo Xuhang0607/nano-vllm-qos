@@ -294,6 +294,44 @@ outputs = llm.generate(["Hello, Nano-vLLM."], params)
 print(outputs[0]["text"])
 ```
 
+## OpenAI-Compatible Server and Web Console
+
+Install the optional serving dependencies and start one API process per GPU:
+
+```bash
+python -m pip install -e ".[serve]"
+python -m nanovllm.serve \
+  --model /path/to/Qwen3-0.6B \
+  --served-model-name qwen3-0.6b \
+  --scheduling-policy pals \
+  --prefix-cache-backend radix \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+Open `http://127.0.0.1:8000/` for the streaming chat console. To inspect the
+API and responsive UI without model weights or a CUDA GPU, use the explicitly
+labeled development backend:
+
+```bash
+python -m pip install -r requirements-control.txt
+python -m nanovllm.serve --mock --port 8010
+```
+
+The server implements text-only `POST /v1/chat/completions`, including SSE
+chunks, optional final usage chunks, `GET /v1/models`, and OpenAI-style error
+envelopes. It also accepts nano-vLLM QoS extensions: `priority`,
+`request_class`, `ttft_slo_ms`, `tpot_slo_ms`, and `e2e_slo_ms`. An optional
+`--api-key` protects `/v1/*` routes. The wire shape follows the official
+[Chat Completions API reference](https://developers.openai.com/api/reference/resources/chat).
+
+A dedicated inference worker owns engine construction and every CUDA call.
+FastAPI handles HTTP asynchronously, new requests are admitted before each
+engine step for continuous batching, and each decode step publishes a token
+event. Client disconnects call the scheduler cancellation path and release
+owned KV blocks. See the
+[Chinese serving design note](docs/openai_serving_zh.md) for the complete flow.
+
 ## Optional Mooncake Smoke Test
 
 On a supported Linux environment, install the optional dependency and validate
@@ -322,6 +360,7 @@ RDMA, and GPU tensor movement have not been validated on Windows.
 | `nanovllm/engine/kv_page.py` | Stable page envelope, Torch page movement, and async storage bridge |
 | `nanovllm/engine/remote_catalog.py` | Versioned persistent-catalog snapshot schema and codec |
 | `nanovllm/engine/remote_restore.py` | Remote prefix catalog, background I/O service, and restore/write-back batches |
+| `nanovllm/serve/` | OpenAI-compatible protocol, inference worker, mock backend, and web console |
 | `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
@@ -340,6 +379,7 @@ design.
 - [x] Remote-fetch completion, atomic BlockManager registration, scheduler wakeup, cancellation isolation, and prefill fallback for TP=1
 - [x] Safe-point automatic remote write-back, duplicate-PUT coalescing, failure isolation, and atomic catalog publication for TP=1
 - [x] Versioned persistent catalog snapshot and single-writer reconstruction across process restarts
+- [x] OpenAI-compatible text chat API, true token streaming, request cancellation, API-key option, and responsive metrics console
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
@@ -358,6 +398,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [Remote restore and scheduler wakeup (Chinese)](docs/remote_restore_scheduler_zh.md)
 - [Automatic remote write-back (Chinese)](docs/remote_writeback_zh.md)
 - [Persistent remote catalog (Chinese)](docs/persistent_catalog_zh.md)
+- [OpenAI-compatible serving and streaming console (Chinese)](docs/openai_serving_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements

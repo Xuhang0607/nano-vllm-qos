@@ -113,6 +113,7 @@ class LLMEngine:
         self.config = config
         self.pending_remote_writebacks = []
         self.remote_writeback_errors = deque(maxlen=128)
+        self._step_token_events = ()
         self._exited = False
         atexit.register(self.exit)
 
@@ -273,7 +274,16 @@ class LLMEngine:
         self.scheduler.add(seq)
         return seq.seq_id
 
+    def cancel_request(self, seq_id: int) -> bool:
+        return self.scheduler.cancel(seq_id)
+
+    def take_step_token_events(self):
+        events = self._step_token_events
+        self._step_token_events = ()
+        return events
+
     def step(self):
+        self._step_token_events = ()
         while True:
             self._process_remote_writebacks()
             self._process_ready_remote_restores()
@@ -293,7 +303,15 @@ class LLMEngine:
         observed_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else len(seqs)
         self.scheduler.observe_execution(is_prefill, observed_tokens, elapsed_ms)
         self._enqueue_remote_writebacks(seqs)
+        previous_completion_lengths = {
+            seq.seq_id: seq.num_completion_tokens for seq in seqs
+        }
         self.scheduler.postprocess(seqs, token_ids, is_prefill)
+        self._step_token_events = tuple(
+            (seq.seq_id, token_id)
+            for seq, token_id in zip(seqs, token_ids)
+            if seq.num_completion_tokens > previous_completion_lengths[seq.seq_id]
+        )
         self._process_remote_writebacks()
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         return outputs, num_tokens
@@ -351,3 +369,7 @@ class LLMEngine:
 
     def get_scheduler_metrics(self):
         return self.scheduler.metrics()
+
+    def get_request_metrics(self, seq_id: int):
+        metrics = self.scheduler.request_metrics(seq_id)
+        return metrics.to_dict() if metrics is not None else None

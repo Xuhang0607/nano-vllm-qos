@@ -261,6 +261,40 @@ outputs = llm.generate(["你好，Nano-vLLM。"], params)
 print(outputs[0]["text"])
 ```
 
+## OpenAI 兼容服务与对话前端
+
+安装可选服务依赖后，可以让一个 API 进程独占一张 GPU：
+
+```bash
+python -m pip install -e ".[serve]"
+python -m nanovllm.serve \
+  --model /path/to/Qwen3-0.6B \
+  --served-model-name qwen3-0.6b \
+  --scheduling-policy pals \
+  --prefix-cache-backend radix \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+浏览器打开 `http://127.0.0.1:8000/` 即可使用流式对话界面。没有模型权重或 CUDA
+GPU 时，可以启动带有明确标识的开发后端来检查 API 和响应式前端：
+
+```bash
+python -m pip install -r requirements-control.txt
+python -m nanovllm.serve --mock --port 8010
+```
+
+当前实现支持纯文本 `POST /v1/chat/completions`、SSE 流式 Chunk、可选的最终 Usage
+Chunk、`GET /v1/models` 和 OpenAI 风格错误结构；同时增加 `priority`、
+`request_class`、`ttft_slo_ms`、`tpot_slo_ms`、`e2e_slo_ms` 等 nano-vLLM QoS
+扩展字段。传入 `--api-key` 可以保护 `/v1/*` 路由。协议结构参考官方
+[Chat Completions API 文档](https://developers.openai.com/api/reference/resources/chat)。
+
+独立推理 Worker 负责创建引擎并独占全部 CUDA 调用，FastAPI 只异步处理 HTTP。
+每轮 Engine Step 前接纳新请求以保留 Continuous Batching，每次 Decode 后发布 Token
+事件；客户端断开时进入 Scheduler 取消路径并释放请求持有的 KV Block。完整流程见
+[OpenAI 兼容服务设计解析](docs/openai_serving_zh.md)。
+
 ## 可选 Mooncake 冒烟测试
 
 在受支持的 Linux 环境中，可先验证 Mooncake 适配器，再运行端到端远端恢复：
@@ -288,6 +322,7 @@ RDMA 和 GPU Tensor 数据搬运。
 | `nanovllm/engine/kv_page.py` | 稳定 Page Envelope、Torch Page 搬运与异步存储桥接 |
 | `nanovllm/engine/remote_catalog.py` | 版本化持久化 Catalog 快照格式与编解码 |
 | `nanovllm/engine/remote_restore.py` | Remote Prefix Catalog、后台 I/O 服务与 Restore/Write-Back Batch |
+| `nanovllm/serve/` | OpenAI 兼容协议、推理 Worker、Mock 后端与对话前端 |
 | `benchmarks/` | 确定性的调度与分层缓存模拟器 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
@@ -305,6 +340,7 @@ RDMA 和 GPU Tensor 数据搬运。
 - [x] TP=1 下的 Remote Fetch 完成、BlockManager 原子注册、Scheduler 唤醒、取消隔离与 Prefill 回退
 - [x] TP=1 下的安全点自动 Remote Write-Back、重复 PUT 合并、失败隔离与 Catalog 原子发布
 - [x] 版本化 Catalog 持久化快照与单写者跨进程重启重建
+- [x] OpenAI 兼容纯文本对话 API、真实 Token 流、请求取消、可选 API Key 与响应式指标前端
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
@@ -336,6 +372,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [Remote KV Restore 与 Scheduler 唤醒闭环](docs/remote_restore_scheduler_zh.md)
 - [自动 Remote Write-Back 设计](docs/remote_writeback_zh.md)
 - [Remote Catalog 持久化与重启恢复](docs/persistent_catalog_zh.md)
+- [OpenAI 兼容服务与流式前端设计](docs/openai_serving_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢
