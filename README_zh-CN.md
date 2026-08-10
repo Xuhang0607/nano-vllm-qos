@@ -295,6 +295,24 @@ Chunk、`GET /v1/models` 和 OpenAI 风格错误结构；同时增加 `priority`
 事件；客户端断开时进入 Scheduler 取消路径并释放请求持有的 KV Block。完整流程见
 [OpenAI 兼容服务设计解析](docs/openai_serving_zh.md)。
 
+### Windows Qwen3 兼容后端
+
+Windows 原生环境没有官方 Triton Wheel，因此 nano-vLLM CUDA 主路径应在 Linux/WSL2
+运行。为了在 Windows 上使用同一个前端与真实模型，本项目同时提供一个带明确标识、串行执行的
+Transformers 兼容入口：
+
+```powershell
+python -m pip install -r requirements-transformers-windows.txt
+python scripts/serve_transformers_windows.py `
+  --model D:\models\Qwen3-0.6B `
+  --served-model-name Qwen3-0.6B `
+  --port 8011
+```
+
+该后端使用 SDPA 和固定模型线程，支持真实 SSE 生成与 SSE 客户端断开停止，但**不具备** Continuous
+Batching、Paged KV、Radix Prefix Cache、Remote KV 或 PALS。前端会明确显示这些能力不可用。
+详细说明见 [Windows 本地运行 Qwen3](docs/windows_qwen3_zh.md)。
+
 ## 可选 Mooncake 冒烟测试
 
 在受支持的 Linux 环境中，可先验证 Mooncake 适配器，再运行端到端远端恢复：
@@ -323,6 +341,7 @@ RDMA 和 GPU Tensor 数据搬运。
 | `nanovllm/engine/remote_catalog.py` | 版本化持久化 Catalog 快照格式与编解码 |
 | `nanovllm/engine/remote_restore.py` | Remote Prefix Catalog、后台 I/O 服务与 Restore/Write-Back Batch |
 | `nanovllm/serve/` | OpenAI 兼容协议、推理 Worker、Mock 后端与对话前端 |
+| `scripts/serve_transformers_windows.py` | Windows 原生环境下带明确标识的真实模型兼容入口 |
 | `benchmarks/` | 确定性的调度与分层缓存模拟器 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
@@ -341,6 +360,7 @@ RDMA 和 GPU Tensor 数据搬运。
 - [x] TP=1 下的安全点自动 Remote Write-Back、重复 PUT 合并、失败隔离与 Catalog 原子发布
 - [x] 版本化 Catalog 持久化快照与单写者跨进程重启重建
 - [x] OpenAI 兼容纯文本对话 API、真实 Token 流、请求取消、可选 API Key 与响应式指标前端
+- [x] Windows 原生 Qwen3 Transformers 兼容服务与真实能力标识
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
@@ -373,6 +393,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [自动 Remote Write-Back 设计](docs/remote_writeback_zh.md)
 - [Remote Catalog 持久化与重启恢复](docs/persistent_catalog_zh.md)
 - [OpenAI 兼容服务与流式前端设计](docs/openai_serving_zh.md)
+- [Windows 本地运行真实 Qwen3 模型](docs/windows_qwen3_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

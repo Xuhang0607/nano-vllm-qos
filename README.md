@@ -332,6 +332,27 @@ event. Client disconnects call the scheduler cancellation path and release
 owned KV blocks. See the
 [Chinese serving design note](docs/openai_serving_zh.md) for the complete flow.
 
+### Windows Qwen3 Compatibility Backend
+
+Official Triton wheels are not available for native Windows, so the nano-vLLM
+CUDA path should be run on Linux/WSL2. For local Windows UI development and
+real-model chat, this repository also provides an explicitly labeled,
+serialized Transformers backend:
+
+```powershell
+python -m pip install -r requirements-transformers-windows.txt
+python scripts/serve_transformers_windows.py `
+  --model D:\models\Qwen3-0.6B `
+  --served-model-name Qwen3-0.6B `
+  --port 8011
+```
+
+This backend uses SDPA and a persistent model-owning thread. It supports real
+SSE generation and cancellation when an SSE client disconnects, but **does not** provide
+continuous batching, Paged KV, Radix prefix reuse, remote KV, or PALS. The UI
+reports those capabilities as unavailable. See the
+[Windows Qwen3 guide (Chinese)](docs/windows_qwen3_zh.md).
+
 ## Optional Mooncake Smoke Test
 
 On a supported Linux environment, install the optional dependency and validate
@@ -361,6 +382,7 @@ RDMA, and GPU tensor movement have not been validated on Windows.
 | `nanovllm/engine/remote_catalog.py` | Versioned persistent-catalog snapshot schema and codec |
 | `nanovllm/engine/remote_restore.py` | Remote prefix catalog, background I/O service, and restore/write-back batches |
 | `nanovllm/serve/` | OpenAI-compatible protocol, inference worker, mock backend, and web console |
+| `scripts/serve_transformers_windows.py` | Explicitly labeled real-model fallback for native Windows |
 | `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
@@ -380,6 +402,7 @@ design.
 - [x] Safe-point automatic remote write-back, duplicate-PUT coalescing, failure isolation, and atomic catalog publication for TP=1
 - [x] Versioned persistent catalog snapshot and single-writer reconstruction across process restarts
 - [x] OpenAI-compatible text chat API, true token streaming, request cancellation, API-key option, and responsive metrics console
+- [x] Native-Windows Qwen3 Transformers compatibility server with honest capability reporting
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
@@ -399,6 +422,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [Automatic remote write-back (Chinese)](docs/remote_writeback_zh.md)
 - [Persistent remote catalog (Chinese)](docs/persistent_catalog_zh.md)
 - [OpenAI-compatible serving and streaming console (Chinese)](docs/openai_serving_zh.md)
+- [Run the real Qwen3 model on Windows (Chinese)](docs/windows_qwen3_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements

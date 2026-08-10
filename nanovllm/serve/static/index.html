@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>nano-vLLM Console</title>
-  <link rel="stylesheet" href="/static/styles.css?v=3">
+  <link rel="stylesheet" href="/static/styles.css?v=5">
 </head>
 <body>
   <div class="app-shell">
@@ -75,7 +75,7 @@
 
       <form id="composer" class="composer">
         <div class="composer-toolbar">
-          <span class="toolbar-label">优先级</span>
+          <span id="priorityLabel" class="toolbar-label">优先级</span>
           <div id="priorityControl" class="segmented-control" role="radiogroup" aria-label="请求优先级">
             <button type="button" class="segment active" data-priority="0">普通</button>
             <button type="button" class="segment" data-priority="5">交互</button>
@@ -130,6 +130,6 @@
     </aside>
   </div>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="/static/app.js?v=3"></script>
+  <script src="/static/app.js?v=5"></script>
 </body>
 </html>

@@ -64,7 +64,7 @@ function createMessage(role, content = "", generating = false) {
   body.className = "message-body";
   const label = document.createElement("div");
   label.className = "message-role";
-  label.textContent = role === "assistant" ? "nano-vLLM" : "You";
+  label.textContent = role === "assistant" ? state.model : "You";
   const text = document.createElement("div");
   text.className = "message-content";
   text.textContent = content;
@@ -81,7 +81,7 @@ function renderMessages() {
     const empty = document.createElement("div");
     empty.id = "emptyState";
     empty.className = "empty-state";
-    empty.innerHTML = `<div class="empty-logo">nV</div><h1>开始本地对话</h1><p>${state.model}</p>`;
+    empty.innerHTML = `<div class="empty-logo">nV</div><h1>开始本地对话</h1><p id="emptyModel">${state.model}</p>`;
     messageList.append(empty);
     return;
   }
@@ -219,6 +219,7 @@ async function submitPrompt(event) {
   event.preventDefault();
   const content = promptInput.value.trim();
   if (!content || state.running) return;
+  $("settingsPanel").hidden = true;
   const userMessage = { role: "user", content };
   state.messages.push(userMessage);
   createMessage("user", content);
@@ -264,6 +265,11 @@ async function refreshHealth() {
     setText("modelLabel", health.model);
     setText("backendLabel", health.backend);
     setText("emptyModel", health.model);
+    document.querySelectorAll(".message.assistant .message-role")
+      .forEach((element) => { element.textContent = health.model; });
+    const supportsQos = !health.backend.includes("Transformers");
+    $("priorityLabel").hidden = !supportsQos;
+    $("priorityControl").hidden = !supportsQos;
     $("statusDot").classList.toggle("online", health.status === "ok");
   } catch {
     setText("backendLabel", "Disconnected");
