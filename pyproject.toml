@@ -19,6 +19,9 @@ dependencies = [
     "xxhash",
 ]
 
+[project.optional-dependencies]
+mooncake = ["mooncake-transfer-engine"]
+
 [project.urls]
 Homepage="https://github.com/GeeeekExplorer/nano-vllm"
 

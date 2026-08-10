@@ -1,0 +1,4 @@
+numpy>=1.26
+pytest>=8.0
+ruff>=0.12
+xxhash>=3.5

@@ -8,6 +8,7 @@ import torch.multiprocessing as mp
 from nanovllm.config import Config
 from nanovllm.sampling_params import SamplingParams
 from nanovllm.engine.sequence import Sequence
+from nanovllm.engine.qos import RequestQoS
 from nanovllm.engine.scheduler import Scheduler
 from nanovllm.engine.model_runner import ModelRunner
 
@@ -40,16 +41,26 @@ class LLMEngine:
         for p in self.ps:
             p.join()
 
-    def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
+    def add_request(
+        self,
+        prompt: str | list[int],
+        sampling_params: SamplingParams,
+        qos: RequestQoS | None = None,
+    ):
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
-        seq = Sequence(prompt, sampling_params)
+        seq = Sequence(prompt, sampling_params, qos=qos)
         self.scheduler.add(seq)
+        return seq.seq_id
 
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
         num_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else -len(seqs)
+        started = perf_counter()
         token_ids = self.model_runner.call("run", seqs, is_prefill)
+        elapsed_ms = (perf_counter() - started) * 1000.0
+        observed_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else len(seqs)
+        self.scheduler.observe_execution(is_prefill, observed_tokens, elapsed_ms)
         self.scheduler.postprocess(seqs, token_ids, is_prefill)
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         return outputs, num_tokens
@@ -61,13 +72,23 @@ class LLMEngine:
         self,
         prompts: list[str] | list[list[int]],
         sampling_params: SamplingParams | list[SamplingParams],
+        request_qos: RequestQoS | list[RequestQoS] | None = None,
         use_tqdm: bool = True,
-    ) -> list[str]:
+    ) -> list[dict]:
         pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True, disable=not use_tqdm)
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
-        for prompt, sp in zip(prompts, sampling_params):
-            self.add_request(prompt, sp)
+        elif len(sampling_params) != len(prompts):
+            raise ValueError("sampling_params must have the same length as prompts")
+        if request_qos is None:
+            request_qos = [RequestQoS()] * len(prompts)
+        elif not isinstance(request_qos, list):
+            request_qos = [request_qos] * len(prompts)
+        elif len(request_qos) != len(prompts):
+            raise ValueError("request_qos must have the same length as prompts")
+        submitted_seq_ids = []
+        for prompt, sp, qos in zip(prompts, sampling_params, request_qos):
+            submitted_seq_ids.append(self.add_request(prompt, sp, qos))
         outputs = {}
         prefill_throughput = decode_throughput = 0.
         while not self.is_finished():
@@ -85,6 +106,15 @@ class LLMEngine:
                 outputs[seq_id] = token_ids
                 pbar.update(1)
         pbar.close()
-        outputs = [outputs[seq_id] for seq_id in sorted(outputs.keys())]
-        outputs = [{"text": self.tokenizer.decode(token_ids), "token_ids": token_ids} for token_ids in outputs]
+        outputs = [
+            {
+                "text": self.tokenizer.decode(outputs[seq_id]),
+                "token_ids": outputs[seq_id],
+                "metrics": self.scheduler.request_metrics(seq_id).to_dict(),
+            }
+            for seq_id in submitted_seq_ids
+        ]
         return outputs
+
+    def get_scheduler_metrics(self):
+        return self.scheduler.metrics()

@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "benchmark": "deterministic transfer-vs-recompute simulation",
+    "gpu_measurement": false,
+    "requests": 120,
+    "geometry": {
+      "layers": 28,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "dtype_bytes": 2
+    },
+    "mooncake_bandwidth_gbps": 12.5
+  },
+  "strategies": {
+    "local_recompute": {
+      "requests": 120,
+      "estimated_total_ms": 12864.0,
+      "estimated_average_ms": 107.2,
+      "restore_requests": 0,
+      "recompute_requests": 120,
+      "local_hit_requests": 0,
+      "transfer_gib": 0.0,
+      "recomputed_tokens": 201600
+    },
+    "always_restore": {
+      "requests": 120,
+      "estimated_total_ms": 20271.735010559998,
+      "estimated_average_ms": 168.931125088,
+      "restore_requests": 120,
+      "recompute_requests": 0,
+      "local_hit_requests": 0,
+      "transfer_gib": 13.203399658203125,
+      "recomputed_tokens": 77986
+    },
+    "cost_aware": {
+      "requests": 120,
+      "estimated_total_ms": 11514.62407552,
+      "estimated_average_ms": 95.95520062933333,
+      "restore_requests": 70,
+      "recompute_requests": 50,
+      "local_hit_requests": 0,
+      "transfer_gib": 3.4598388671875,
+      "recomputed_tokens": 169208
+    }
+  }
+}
