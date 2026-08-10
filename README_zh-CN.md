@@ -73,7 +73,8 @@ flowchart LR
 | Transfer-vs-Recompute | KV 几何尺寸、带宽/时延/拥塞模型与最低成本来源选择 | 控制面原型 |
 | Mooncake 适配器 | 单对象与批量接口、稳定 KV Page 标识、Fake Store 测试与 TCP 冒烟脚本 | 适配层已实现 |
 | 异步传输协调 | Key 级状态机、重复 Fetch 合并、取消隔离、失败重试与 Fetch/Write/Evict 有序执行 | 控制面原型 |
-| 真实远端 KV Tensor | GPU/CPU 序列化、异步拷贝、调度器阻塞与唤醒 | Roadmap |
+| KV Page 数据面 | 版本化/带校验 Envelope、布局兼容检查、Pinned CPU Staging 与真实 Tensor Page 导出/恢复 | Rank-Local 原语已实现 |
+| 自动远端恢复 | Scheduler 阻塞/唤醒、BlockManager 注册、传输/计算重叠与 TP Rank 协同 | Roadmap |
 
 ## 核心设计
 
@@ -153,6 +154,16 @@ decision = argmin(T_recompute, T_cpu_restore, T_mooncake_restore)
 时，旧 Generation 无法重新发布过期 Payload，同时 Backend Remove 会排在 Read 之后执行。
 失败状态可观测、可重试，避免对象永久卡在中间状态。
 
+### 5. 版本化 KV Page 数据面
+
+一个物理 Block 跨越 K/V 和全部模型 Layer。固定 Block 维后，跨 Layer 的数据不保证连续，
+因此 `TorchKVPageIO` 会先把 Page 打包到连续的 Pinned CPU Buffer。版本化 Envelope 保存
+模型身份、TP Rank、逻辑 Page Index、Tensor Layout、原始字节和 BLAKE2b Checksum。
+
+`ModelRunner` 已提供 Rank-Local 导出/导入原语。恢复前会校验消费端身份与当前 KV Cache
+实际 Layout，再把字节写入新分配的 Physical Block。当前 API 在返回前同步，Scheduler
+驱动的异步恢复仍属于下一阶段。
+
 ## 复现控制面实验
 
 控制面测试不需要模型权重和 CUDA GPU：
@@ -166,6 +177,12 @@ python -m benchmarks.benchmark_qos_scheduler \
 
 python -m benchmarks.benchmark_tiered_cache \
   --output-json benchmarks/results/tiered_cache_simulation.json
+```
+
+在符合版本要求的 PyTorch/CUDA 环境中，可以验证真实 BF16 KV Tensor Page 往返：
+
+```bash
+python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 ```
 
 ### 确定性模拟结果
@@ -228,6 +245,7 @@ RDMA 和 GPU Tensor 数据搬运。
 | `nanovllm/engine/hierarchical_cache.py` | 分层索引与 Transfer-vs-Recompute 决策器 |
 | `nanovllm/engine/storage_backend.py` | In-Memory 与 Mooncake KV 对象适配器 |
 | `nanovllm/engine/transfer_coordinator.py` | 异步 KV 状态机、并发请求合并与 Key 级 I/O 排序 |
+| `nanovllm/engine/kv_page.py` | 稳定 Page Envelope、Torch Page 搬运与异步存储桥接 |
 | `benchmarks/` | 确定性的调度与分层缓存模拟器 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
@@ -241,7 +259,8 @@ RDMA 和 GPU Tensor 数据搬运。
 - [x] 分层元数据索引与传输成本模型
 - [x] Mooncake 对象适配器与确定性 Benchmark
 - [x] 可合并重复请求的异步 Fetch/Write/Evict 状态机
-- [ ] 真实逐层 K/V Page 序列化与 CPU <-> GPU 传输
+- [x] 版本化真实 K/V Page 序列化与同步 CPU <-> GPU 恢复原语
+- [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] Remote Fetch 完成后唤醒调度器，并正确处理 Request Cancellation
 - [ ] 在统一模型、硬件、请求到达率和 Prompt 分布下完成 GPU Baseline 与 Ablation
 - [ ] 报告 TTFT/TPOT p50/p95/p99、SLO Goodput、各级命中率、传输字节数和重计算 Token
@@ -267,6 +286,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [QoS 调度器设计](docs/qos_scheduler_zh.md)
 - [分层 Radix 与 Mooncake 设计](docs/hierarchical_radix_mooncake_zh.md)
 - [异步 KV 传输状态机设计](docs/async_kv_transfer_zh.md)
+- [KV Page 数据面与稳定 Envelope](docs/kv_page_data_plane_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

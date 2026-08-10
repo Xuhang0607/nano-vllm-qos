@@ -5,6 +5,11 @@ from multiprocessing.synchronize import Event
 from multiprocessing.shared_memory import SharedMemory
 
 from nanovllm.config import Config
+from nanovllm.engine.kv_page import (
+    KVPageCodec,
+    KVPageMetadata,
+    TorchKVPageIO,
+)
 from nanovllm.engine.sequence import Sequence
 from nanovllm.models.qwen3 import Qwen3ForCausalLM
 from nanovllm.layers.sampler import Sampler
@@ -113,12 +118,45 @@ class ModelRunner:
         config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
         assert config.num_kvcache_blocks > 0
         self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, head_dim)
+        self.kv_page_io = TorchKVPageIO(self.kv_cache)
         layer_id = 0
         for module in self.model.modules():
             if hasattr(module, "k_cache") and hasattr(module, "v_cache"):
                 module.k_cache = self.kv_cache[0, layer_id]
                 module.v_cache = self.kv_cache[1, layer_id]
                 layer_id += 1
+
+    def export_kv_page(
+        self,
+        block_id: int,
+        identity_digest: str,
+        page_index: int,
+    ) -> bytes:
+        payload = self.kv_page_io.export_page(block_id)
+        metadata = KVPageMetadata(
+            identity_digest=identity_digest,
+            tp_rank=self.rank,
+            page_index=page_index,
+            layout=self.kv_page_io.layout,
+        )
+        return KVPageCodec.encode(metadata, payload)
+
+    def import_kv_page(
+        self,
+        block_id: int,
+        envelope: bytes,
+        identity_digest: str,
+        page_index: int,
+    ) -> int:
+        record = KVPageCodec.decode(
+            envelope,
+            expected_identity_digest=identity_digest,
+            expected_tp_rank=self.rank,
+            expected_page_index=page_index,
+            expected_layout=self.kv_page_io.layout,
+        )
+        self.kv_page_io.import_page(block_id, record.payload)
+        return len(record.payload)
 
     def prepare_block_tables(self, seqs: list[Sequence]):
         max_len = max(len(seq.block_table) for seq in seqs)

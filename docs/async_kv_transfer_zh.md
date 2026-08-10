@@ -122,12 +122,13 @@ request B waiting ------^
 
 ## 7. 当前边界
 
-当前实现解决的是 Remote KV 对象操作的控制面并发问题，还没有完成以下数据面工作：
+当前实现解决的是 Remote KV 对象操作的控制面并发问题。真实 Physical Page 的打包、稳定
+Envelope 与同步 GPU/CPU 恢复原语已经在 `kv_page.py` 中实现，详见
+[KV Page 数据面设计](kv_page_data_plane_zh.md)。仍未完成的是自动调度闭环：
 
-1. 从 nano-vLLM 每层 K/V Tensor 中提取指定 Page。
-2. 定义跨进程稳定的 Tensor Layout 与序列化格式。
-3. 使用 Pinned Memory 和独立 CUDA Stream 执行 CPU/GPU 异步拷贝。
-4. Fetch 完成后把物理 Block 注册回 `BlockManager` 并唤醒 Scheduler。
-5. 在 Request Cancellation 时同时维护 Sequence、Block Refcount 与 Transfer Waiter 生命周期。
+1. 使用独立 CUDA Stream 和 Event 让 CPU/GPU 拷贝与模型计算重叠。
+2. Fetch 完成后把物理 Block 注册回 `BlockManager` 并唤醒 Scheduler。
+3. 在 Request Cancellation 时同时维护 Sequence、Block Refcount 与 Transfer Waiter 生命周期。
+4. Tensor Parallel 下让每个 Rank 读写各自的 KV Shard，并同步完成状态。
 
 下一阶段接入真实数据面时，应保持本状态机作为传输协调层，而不是让 Scheduler 直接调用 Mooncake API。这样 Scheduler 只处理请求可运行状态，存储错误、重复请求和 I/O 顺序由协调器统一管理。

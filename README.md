@@ -79,7 +79,8 @@ real model KV tensors between tiers is not integrated yet.
 | Transfer-vs-recompute | KV geometry, bandwidth/latency/congestion model, and minimum-cost source selection | Control-plane prototype |
 | Mooncake adapter | Byte object and batch operations, stable KV page identity, fake-store tests, and TCP smoke script | Adapter implemented |
 | Async transfer coordination | Per-key state machine, duplicate-fetch coalescing, cancellation isolation, retryable failures, and ordered Fetch/Write/Evict operations | Control-plane prototype |
-| Real remote KV tensors | GPU/CPU serialization, asynchronous copy, and scheduler blocking/wakeup integration | Roadmap |
+| KV page data plane | Versioned/checksummed envelope, layout compatibility checks, pinned CPU staging, and physical Tensor page export/restore | Rank-local primitive implemented |
+| Automatic remote restore | Scheduler blocking/wakeup, BlockManager registration, transfer/compute overlap, and TP-rank orchestration | Roadmap |
 
 ## Core Design
 
@@ -166,6 +167,19 @@ publish its payload, and the backend remove executes after the read. Failed
 operations become observable and can be retried instead of leaving the object
 stuck in a transitional state.
 
+### 5. Versioned KV Page Data Plane
+
+A physical block spans K/V and every model layer. Because fixing the block axis
+does not produce contiguous storage across layers, `TorchKVPageIO` first packs
+the page into a contiguous pinned CPU buffer. The versioned envelope carries
+model identity, TP rank, logical page index, Tensor layout, raw bytes, and a
+BLAKE2b checksum.
+
+`ModelRunner` exposes rank-local export/import primitives. Import validates the
+consumer identity and actual KV cache layout before copying bytes into a newly
+allocated physical block. The current primitive synchronizes at the API
+boundary; scheduler-driven asynchronous restore remains future work.
+
 ## Reproduce the Control-Plane Experiments
 
 The control-plane suite does not require model weights or a CUDA GPU:
@@ -179,6 +193,13 @@ python -m benchmarks.benchmark_qos_scheduler \
 
 python -m benchmarks.benchmark_tiered_cache \
   --output-json benchmarks/results/tiered_cache_simulation.json
+```
+
+With a compatible PyTorch/CUDA environment, validate a real synthetic BF16 KV
+Tensor page round trip:
+
+```bash
+python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 ```
 
 ### Deterministic Simulator Results
@@ -245,6 +266,7 @@ RDMA, and GPU tensor movement have not been validated on Windows.
 | `nanovllm/engine/hierarchical_cache.py` | Tier indexes and transfer-vs-recompute planner |
 | `nanovllm/engine/storage_backend.py` | In-memory and Mooncake KV object adapters |
 | `nanovllm/engine/transfer_coordinator.py` | Async KV state machine, request coalescing, and per-key I/O ordering |
+| `nanovllm/engine/kv_page.py` | Stable page envelope, Torch page movement, and async storage bridge |
 | `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
@@ -259,7 +281,8 @@ design.
 - [x] Hierarchical metadata indexes and transfer cost model
 - [x] Mooncake object adapter and deterministic benchmarks
 - [x] Deduplicated asynchronous fetch/write/evict state machine
-- [ ] Serialize real per-layer K/V pages and execute CPU <-> GPU transfers
+- [x] Versioned real K/V page serialization and synchronous CPU <-> GPU restore primitive
+- [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Connect remote-fetch completion to scheduler wakeup and cancellation
 - [ ] Run GPU baselines and ablations with fixed model, hardware, request rate, and prompt distribution
 - [ ] Report TTFT/TPOT p50/p95/p99, SLO goodput, cache hit rate, transfer bytes, and recomputed tokens
@@ -272,6 +295,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [QoS scheduler design (Chinese)](docs/qos_scheduler_zh.md)
 - [Hierarchical Radix and Mooncake design (Chinese)](docs/hierarchical_radix_mooncake_zh.md)
 - [Asynchronous KV transfer state machine (Chinese)](docs/async_kv_transfer_zh.md)
+- [KV page data plane and stable envelope (Chinese)](docs/kv_page_data_plane_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements
