@@ -126,6 +126,16 @@ ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 Paged KV Cache 和 Continuous Batching 是 nano-vLLM 引擎本身的执行机制，不需要
 额外开关。PALS、Radix 和 Mooncake 则分别由上面的参数选择。
 
+需要演示优先级排队时，可以临时把并发槽位限制为 1：
+
+```bash
+MAX_NUM_SEQS=1 ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
+```
+
+此时较晚到达的紧急请求可以越过已经等待的普通请求。正常聊天时不要限制为 1，
+直接使用默认值 64，才能保留 Continuous Batching 的并发能力。也可以设置
+`SCHEDULING_POLICY=fcfs` 运行相同负载，作为不考虑优先级的对照组。
+
 为什么本地 Buffer 是 512 MiB：Qwen3-0.6B 在当前布局下每个 KV Page Envelope
 约 28 MiB。2174 Token 的请求会产生 8 个可写回页面，并发 PUT 需要约 224 MiB。
 128 MiB 会在第五页开始出现 `Failed to allocate buffer`，512 MiB 能覆盖 4096
