@@ -150,6 +150,16 @@ def create_app(
                     code="model_not_found",
                 ),
             )
+        max_model_len = worker.metrics().get("max_model_len")
+        if max_model_len is not None and payload.output_limit > max_model_len:
+            raise HTTPException(
+                400,
+                _error(
+                    f"max_tokens must not exceed max_model_len ({max_model_len})",
+                    param="max_tokens",
+                    code="context_length_exceeded",
+                ),
+            )
         return worker.submit(
             [message.model_dump() for message in payload.messages],
             SamplingParams(

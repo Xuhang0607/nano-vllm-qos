@@ -11,7 +11,6 @@ from uuid import uuid4
 from nanovllm.engine.qos import RequestQoS
 from nanovllm.sampling_params import SamplingParams
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -203,6 +202,19 @@ class InferenceWorker:
             return
         try:
             prompt_ids = self._prompt_token_ids(engine.tokenizer, queued.messages)
+            max_model_len = getattr(getattr(engine, "config", None), "max_model_len", None)
+            requested_tokens = queued.sampling_params.max_tokens
+            if (
+                max_model_len is not None
+                and len(prompt_ids) + requested_tokens > max_model_len
+            ):
+                available_tokens = max(0, max_model_len - len(prompt_ids))
+                raise ValueError(
+                    "context length exceeded: "
+                    f"prompt has {len(prompt_ids)} tokens and max_tokens requests "
+                    f"{requested_tokens}, but max_model_len is {max_model_len}; "
+                    f"at most {available_tokens} completion tokens are available"
+                )
             seq_id = engine.add_request(
                 prompt_ids,
                 queued.sampling_params,
@@ -303,6 +315,7 @@ class InferenceWorker:
             self._startup_error = exc
             self._ready.set()
             return
+        self._set_metrics(engine.get_scheduler_metrics(), 0)
         self._ready.set()
 
         try:

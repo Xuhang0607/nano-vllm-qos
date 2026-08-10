@@ -47,6 +47,9 @@ function updateSchedulerMetrics(metrics = {}) {
   setText("cacheRateValue", `${Math.round(rate * 100)}%`);
   $("cacheRateBar").style.width = `${rate * 100}%`;
   if (metrics.policy) setText("policyBadge", String(metrics.policy).toUpperCase());
+  if (metrics.max_model_len) {
+    $("maxTokens").max = String(metrics.max_model_len);
+  }
 }
 
 function scrollToBottom() {
@@ -219,6 +222,7 @@ async function submitPrompt(event) {
   event.preventDefault();
   const content = promptInput.value.trim();
   if (!content || state.running) return;
+  if (!$("maxTokens").reportValidity()) return;
   $("settingsPanel").hidden = true;
   const userMessage = { role: "user", content };
   state.messages.push(userMessage);

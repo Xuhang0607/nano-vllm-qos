@@ -134,3 +134,15 @@ def test_unknown_model_returns_model_not_found_error():
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "model_not_found"
+
+
+def test_output_limit_cannot_exceed_the_served_context_window():
+    with make_client() as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json=request_body(max_tokens=65536),
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "context_length_exceeded"
+    assert response.json()["error"]["param"] == "max_tokens"

@@ -29,6 +29,11 @@ class Scheduler:
     ):
         self.max_num_seqs = config.max_num_seqs
         self.max_num_batched_tokens = config.max_num_batched_tokens
+        self.max_model_len = getattr(
+            config,
+            "max_model_len",
+            config.max_num_batched_tokens,
+        )
         self.eos = config.eos
         self.block_size = config.kvcache_block_size
         self.block_manager = BlockManager(
@@ -267,6 +272,7 @@ class Scheduler:
         result = summarize_metrics(self.completed_metrics)
         result.update({
             "policy": self.policy_name,
+            "max_model_len": self.max_model_len,
             "prefill_ms_per_token_ewma": self.estimator.prefill_ms_per_token,
             "decode_ms_per_token_ewma": self.estimator.decode_ms_per_token,
         })

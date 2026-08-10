@@ -2,6 +2,7 @@ from nanovllm.engine.qos import RequestQoS
 from nanovllm.sampling_params import SamplingParams
 from nanovllm.serve.engine_worker import (
     GenerationCancelled,
+    GenerationFailed,
     GenerationFinished,
     InferenceWorker,
     TextDelta,
@@ -65,3 +66,22 @@ def test_worker_cancels_active_request():
 
     assert isinstance(result, GenerationCancelled)
     assert engine.get_scheduler_metrics()["cancelled_requests"] == 1
+
+
+def test_worker_rejects_prompt_and_output_beyond_context_window():
+    engine = MockEngine(step_delay_s=0)
+    engine.config = type("Config", (), {"max_model_len": 32, "eos": -1})()
+    worker = InferenceWorker(lambda: engine, "nano-test", "test")
+    worker.start()
+    try:
+        handle = worker.submit(
+            [{"role": "user", "content": "this prompt is already too long"}],
+            SamplingParams(max_tokens=16),
+            RequestQoS(),
+        )
+        result = handle.events.get(timeout=2)
+    finally:
+        worker.stop()
+
+    assert isinstance(result, GenerationFailed)
+    assert "context length exceeded" in result.message
