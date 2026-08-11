@@ -108,9 +108,11 @@ function renderSessions() {
   const list = $("sessionList");
   list.replaceChildren();
   for (const [index, session] of state.sessions.entries()) {
+    const row = document.createElement("div");
+    row.className = `session-row${session.active ? " active" : ""}`;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `session-item${session.active ? " active" : ""}`;
+    button.className = "session-item";
     button.textContent = session.title;
     button.title = session.title;
     button.addEventListener("click", () => {
@@ -122,8 +124,27 @@ function renderSessions() {
       renderSessions();
       renderMessages();
     });
-    list.append(button);
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "session-delete";
+    deleteButton.title = `删除对话：${session.title}`;
+    deleteButton.setAttribute("aria-label", `删除对话：${session.title}`);
+    deleteButton.innerHTML = '<i data-lucide="trash-2">删除</i>';
+    deleteButton.addEventListener("click", () => {
+      if (state.running) return;
+      if (!window.confirm(`确定删除“${session.title}”吗？此操作无法撤销。`)) return;
+      const deletingActiveSession = session.active;
+      state.sessions.splice(index, 1);
+      if (deletingActiveSession) state.messages = [];
+      localStorage.setItem("nanovllm-sessions", JSON.stringify(state.sessions));
+      renderSessions();
+      if (deletingActiveSession) renderMessages();
+      promptInput.focus();
+    });
+    row.append(button, deleteButton);
+    list.append(row);
   }
+  initializeIcons();
 }
 
 function newConversation() {
@@ -317,7 +338,6 @@ $("priorityControl").addEventListener("click", (event) => {
   document.querySelectorAll(".segment").forEach((item) => item.classList.toggle("active", item === button));
 });
 
-initializeIcons();
 renderSessions();
 renderMessages();
 refreshHealth();

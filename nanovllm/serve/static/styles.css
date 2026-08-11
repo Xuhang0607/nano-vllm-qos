@@ -78,13 +78,25 @@ button { cursor: pointer; }
 .sessions-panel { border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; }
 .panel-heading { justify-content: space-between; height: 32px; color: #4e5a56; font-size: 12px; font-weight: 750; text-transform: uppercase; }
 .session-list { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; overflow-y: auto; }
+.session-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center;
+  min-height: 40px; border-radius: 6px;
+}
 .session-item {
-  width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px;
+  width: 100%; min-width: 0; min-height: 40px; padding: 8px 6px 8px 10px; border: 0; border-radius: 6px;
   background: transparent; color: #394540; text-align: left; font-size: 13px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.session-item:hover { background: #e2e9e6; }
-.session-item.active { color: #064c3b; background: #d6e6e0; font-weight: 700; }
+.session-row:hover { background: #e2e9e6; }
+.session-row.active { color: #064c3b; background: #d6e6e0; font-weight: 700; }
+.session-row.active .session-item { color: #064c3b; font-weight: 700; }
+.session-delete {
+  width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 5px;
+  background: transparent; color: #68746f; opacity: 0; transition: opacity 120ms ease, background 120ms ease;
+}
+.session-delete svg { width: 15px; height: 15px; }
+.session-row:hover .session-delete, .session-row.active .session-delete, .session-delete:focus-visible { opacity: 1; }
+.session-delete:hover { color: var(--danger); background: #fff; }
 .engine-note { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 12px 8px 0; border-top: 1px solid #d3dcda; color: var(--muted); font-size: 11px; }
 .policy-badge { padding: 3px 6px; border-radius: 4px; background: #d8e9e3; color: #086149; font-weight: 800; }
 

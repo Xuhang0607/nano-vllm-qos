@@ -415,7 +415,7 @@ design.
 - [x] Remote-fetch completion, atomic BlockManager registration, scheduler wakeup, cancellation isolation, and prefill fallback for TP=1
 - [x] Safe-point automatic remote write-back, duplicate-PUT coalescing, failure isolation, and atomic catalog publication for TP=1
 - [x] Versioned persistent catalog snapshot and single-writer reconstruction across process restarts
-- [x] OpenAI-compatible text chat API, true token streaming, request cancellation, API-key option, and responsive metrics console
+- [x] OpenAI-compatible text chat API, true token streaming, request cancellation, API-key option, local-session deletion, and responsive metrics console
 - [x] Native-Windows Qwen3 Transformers compatibility server with honest capability reporting
 - [x] WSL2 Qwen3 CUDA + Mooncake TCP write-back and cross-worker restart restore
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events

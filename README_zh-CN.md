@@ -371,7 +371,7 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 - [x] TP=1 下的 Remote Fetch 完成、BlockManager 原子注册、Scheduler 唤醒、取消隔离与 Prefill 回退
 - [x] TP=1 下的安全点自动 Remote Write-Back、重复 PUT 合并、失败隔离与 Catalog 原子发布
 - [x] 版本化 Catalog 持久化快照与单写者跨进程重启重建
-- [x] OpenAI 兼容纯文本对话 API、真实 Token 流、请求取消、可选 API Key 与响应式指标前端
+- [x] OpenAI 兼容纯文本对话 API、真实 Token 流、请求取消、可选 API Key、本地会话删除与响应式指标前端
 - [x] Windows 原生 Qwen3 Transformers 兼容服务与真实能力标识
 - [x] WSL2 Qwen3 CUDA + Mooncake TCP 自动写回与跨 Worker 重启恢复
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
