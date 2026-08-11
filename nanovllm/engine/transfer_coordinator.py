@@ -27,8 +27,10 @@ class KVTransferSnapshot:
 @dataclass(slots=True)
 class KVTransferMetrics:
     backend_gets: int = 0
+    backend_get_bytes: int = 0
     coalesced_gets: int = 0
     backend_puts: int = 0
+    backend_put_bytes: int = 0
     backend_removes: int = 0
     cancelled_waiters: int = 0
     failures: int = 0
@@ -104,6 +106,8 @@ class AsyncKVTransferCoordinator:
         try:
             payload = await asyncio.to_thread(self.backend.get, key)
             payload = bytes(payload) if payload is not None else None
+            if payload is not None:
+                self._metrics.backend_get_bytes += len(payload)
         except Exception as exc:
             await self._finish_failure(key, generation, exc)
             raise
@@ -126,6 +130,7 @@ class AsyncKVTransferCoordinator:
         await self._wait_for_previous(previous)
         try:
             await asyncio.to_thread(self.backend.put, key, payload)
+            self._metrics.backend_put_bytes += len(payload)
         except Exception as exc:
             await self._finish_failure(key, generation, exc)
             raise

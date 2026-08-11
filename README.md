@@ -275,6 +275,28 @@ Raw results are stored in
 [`benchmarks/results`](benchmarks/results), and both benchmark scripts use fixed
 workloads so regressions can be tested in CI.
 
+### Live RTX 4060 Serving Measurement
+
+`benchmark_serving_gpu` sends a fixed mixed workload to the live OpenAI API and
+aggregates engine-side TTFT/TPOT/E2E p50/p95/p99, SLO goodput, prefix-cache
+blocks, and Mooncake GET/PUT bytes. The FCFS/PALS run holds Qwen3-0.6B, Radix,
+`max_num_seqs=1`, and the arrival trace constant and changes only the scheduler:
+
+| Metric | FCFS | PALS | Change |
+| --- | ---: | ---: | ---: |
+| Interactive E2E p95 | 8963.88 ms | 591.08 ms | 93.4% lower |
+| Interactive SLO attainment | 0% | 100% | Reached 100% |
+| SLO goodput | 0.39 req/s | 0.78 req/s | 99.2% higher |
+| Batch TTFT p95 | 143.85 ms | 2731.30 ms | 1798.7% higher |
+| Request throughput | 0.783 req/s | 0.780 req/s | Essentially unchanged |
+
+PALS protects interactive E2E SLO with almost unchanged throughput, while
+increasing first-token latency for both classes. Raw JSON, request-level CSV,
+and the generated comparison table live in [`benchmarks/results`](benchmarks/results).
+These are single-machine small-sample measurements; repeat trials and report
+variance before using exact percentages as resume claims. See the
+[Chinese live GPU benchmark guide](docs/gpu_serving_benchmark_zh.md).
+
 ## Installation and Original Inference Path
 
 For full model inference, follow the upstream environment requirements. A
@@ -367,8 +389,10 @@ ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 ```
 
 Qwen3-0.6B exposes its native 40,960-token context window by default. Prompt and
-output tokens share that limit. Set an override such as `MAX_MODEL_LEN=4096`
-when a smaller memory footprint or higher concurrency matters more.
+output tokens share that limit. Startup also clamps the effective limit to the
+allocated KV-block capacity; the default `GPU_MEMORY_UTILIZATION=0.90` produced
+41,728 tokens of capacity on the tested 8 GiB RTX 4060. Set an override such as
+`MAX_MODEL_LEN=4096` when a smaller footprint or higher concurrency matters more.
 
 Open `http://127.0.0.1:8020/` for the web console. The validated restart test
 wrote eight Qwen3 KV pages, restarted only the GPU worker, loaded the persistent
@@ -397,7 +421,7 @@ use `python -m scripts.mooncake_smoke --protocol tcp`.
 | `scripts/serve_transformers_windows.py` | Explicitly labeled real-model fallback for native Windows |
 | `scripts/run_mooncake_wsl.sh` | Mooncake Master and persistent Store Service launch entrypoint |
 | `scripts/run_nanovllm_wsl.sh` | Full Qwen3 CUDA/PALS/Radix/Mooncake serving entrypoint |
-| `benchmarks/` | Deterministic scheduler and tiered-cache simulations |
+| `benchmarks/` | Deterministic simulations, live GPU load generator, and ablation comparison tools |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
 
@@ -418,14 +442,18 @@ design.
 - [x] OpenAI-compatible text chat API, true token streaming, request cancellation, API-key option, local-session deletion, and responsive metrics console
 - [x] Native-Windows Qwen3 Transformers compatibility server with honest capability reporting
 - [x] WSL2 Qwen3 CUDA + Mooncake TCP write-back and cross-worker restart restore
+- [x] FCFS/PALS GPU scheduler comparison under a fixed model, device, and request trace
+- [x] Live TTFT/TPOT/E2E p50/p95/p99, SLO goodput, prefix blocks, and Mooncake byte counters
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
-- [ ] Run GPU baselines and ablations with fixed model, hardware, request rate, and prompt distribution
-- [ ] Report TTFT/TPOT p50/p95/p99, SLO goodput, cache hit rate, transfer bytes, and recomputed tokens
+- [ ] Repeat Hash/Radix and local/Mooncake GPU ablations and report variance
+- [ ] Add recomputed-token, peak-memory, and multi-arrival-rate pressure curves
 
-No resume or performance claim should replace the simulator numbers with GPU
-numbers until those measurements are reproduced on documented hardware.
+The repository now includes a documented single-machine GPU comparison. Until
+it is repeated with variance reporting, resume claims should describe the
+observed trend and benchmark framework rather than present one-run percentages
+as a general performance guarantee.
 
 ## Documentation
 
@@ -439,6 +467,7 @@ numbers until those measurements are reproduced on documented hardware.
 - [OpenAI-compatible serving and streaming console (Chinese)](docs/openai_serving_zh.md)
 - [Run the real Qwen3 model on Windows (Chinese)](docs/windows_qwen3_zh.md)
 - [Run the CUDA + Mooncake full stack on WSL2 (Chinese)](docs/wsl_mooncake_full_stack_zh.md)
+- [Live GPU serving benchmark and ablation (Chinese)](docs/gpu_serving_benchmark_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements

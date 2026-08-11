@@ -243,6 +243,27 @@ python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 原始结果保存在 [`benchmarks/results`](benchmarks/results)。两个 Benchmark 都使用固定
 工作负载，因此可以在 CI 中检测调度与缓存策略回归。
 
+### 真实 RTX 4060 Serving 实验
+
+`benchmark_serving_gpu` 直接向运行中的 OpenAI API 发送固定混合负载，使用引擎内部
+指标汇总 TTFT/TPOT/E2E p50/p95/p99、SLO Goodput、Prefix Cache 命中块以及
+Mooncake GET/PUT 字节数，并输出逐请求 CSV。当前 FCFS/PALS 对照保持 Qwen3-0.6B、
+Radix、`max_num_seqs=1` 和请求到达分布不变，只切换调度策略：
+
+| 指标 | FCFS | PALS | 变化 |
+| --- | ---: | ---: | ---: |
+| Interactive E2E p95 | 8963.88 ms | 591.08 ms | 降低 93.4% |
+| Interactive SLO 达成率 | 0% | 100% | 提升至 100% |
+| SLO Goodput | 0.39 req/s | 0.78 req/s | 提升 99.2% |
+| Batch TTFT p95 | 143.85 ms | 2731.30 ms | 增加 1798.7% |
+| 总请求吞吐 | 0.783 req/s | 0.780 req/s | 基本不变 |
+
+结果说明 PALS 在几乎不改变吞吐的情况下保护交互请求 E2E SLO，但代价是 Batch 和
+Interactive 的首 Token 延迟上升。原始 JSON、CSV 和自动生成的对比表保存在
+[`benchmarks/results`](benchmarks/results)。当前数据属于单机小样本 GPU 测量；简历使用
+具体百分比前仍应进行多轮重复并报告方差。完整方法见
+[真实 GPU Serving Benchmark](docs/gpu_serving_benchmark_zh.md)。
+
 ## 安装与原始推理链路
 
 完整模型推理需要满足上游项目的 CUDA 环境要求。典型的本地开发安装方式为：
@@ -326,7 +347,9 @@ ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 ```
 
 Qwen3-0.6B 默认开放模型原生的 `40960` Token 上下文窗口；输入与输出 Token 总数不能
-超过该值。显存较小或需要更高并发时，可通过 `MAX_MODEL_LEN=4096` 等环境变量降低上限。
+超过该值。引擎还会按启动时实际分配的 KV 块容量收紧有效上限；RTX 4060 8GB 在默认
+`GPU_MEMORY_UTILIZATION=0.90` 下实测容量为 41728 Token。显存较小或需要更高并发时，
+可通过 `MAX_MODEL_LEN=4096` 等环境变量降低上限。
 
 浏览器打开 `http://127.0.0.1:8020/`。本机重启实验写回 8 个 Qwen3 KV Page，只重启
 GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远端 I/O 失败数为
@@ -354,7 +377,7 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 | `scripts/serve_transformers_windows.py` | Windows 原生环境下带明确标识的真实模型兼容入口 |
 | `scripts/run_mooncake_wsl.sh` | Mooncake Master 与常驻 Store Service 启动入口 |
 | `scripts/run_nanovllm_wsl.sh` | Qwen3 CUDA/PALS/Radix/Mooncake 完整服务入口 |
-| `benchmarks/` | 确定性的调度与分层缓存模拟器 |
+| `benchmarks/` | 确定性模拟器、真实 GPU Serving 负载生成器与 Ablation 对比工具 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
 
@@ -374,13 +397,16 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 - [x] OpenAI 兼容纯文本对话 API、真实 Token 流、请求取消、可选 API Key、本地会话删除与响应式指标前端
 - [x] Windows 原生 Qwen3 Transformers 兼容服务与真实能力标识
 - [x] WSL2 Qwen3 CUDA + Mooncake TCP 自动写回与跨 Worker 重启恢复
+- [x] 在固定模型、硬件和请求分布下完成 FCFS/PALS GPU 调度对照
+- [x] 输出 TTFT/TPOT/E2E p50/p95/p99、SLO Goodput、Prefix 命中块和 Mooncake 传输字节
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
-- [ ] 在统一模型、硬件、请求到达率和 Prompt 分布下完成 GPU Baseline 与 Ablation
-- [ ] 报告 TTFT/TPOT p50/p95/p99、SLO Goodput、各级命中率、传输字节数和重计算 Token
+- [ ] 完成 Hash/Radix 与 Local/Mooncake 多轮 GPU Ablation，并报告方差
+- [ ] 增加重计算 Token、显存峰值和多到达率压力曲线
 
-在统一硬件上完成复现之前，简历和项目介绍不应把模拟数据替换成 GPU 实测结论。
+当前已有统一硬件上的单机小样本 GPU 对照；完成多轮重复和方差报告前，简历应描述观察到的
+趋势和实验框架，不应把单轮百分比表述为普遍性能保证。
 
 ## 为什么这是二次开发而不是简单复现
 
@@ -408,6 +434,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [OpenAI 兼容服务与流式前端设计](docs/openai_serving_zh.md)
 - [Windows 本地运行真实 Qwen3 模型](docs/windows_qwen3_zh.md)
 - [WSL2 运行 CUDA + Mooncake 完整链路](docs/wsl_mooncake_full_stack_zh.md)
+- [真实 GPU Serving Benchmark 与 Ablation](docs/gpu_serving_benchmark_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

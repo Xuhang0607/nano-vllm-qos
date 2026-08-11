@@ -34,6 +34,9 @@ class Scheduler:
             "max_model_len",
             config.max_num_batched_tokens,
         )
+        self.requested_max_model_len = getattr(
+            config, "requested_max_model_len", self.max_model_len
+        )
         self.eos = config.eos
         self.block_size = config.kvcache_block_size
         self.block_manager = BlockManager(
@@ -273,6 +276,13 @@ class Scheduler:
         result.update({
             "policy": self.policy_name,
             "max_model_len": self.max_model_len,
+            "requested_max_model_len": self.requested_max_model_len,
+            "max_num_seqs": self.max_num_seqs,
+            "max_num_batched_tokens": self.max_num_batched_tokens,
+            "kvcache_block_size": self.block_size,
+            "num_kvcache_blocks": len(self.block_manager.blocks),
+            "kv_cache_capacity_tokens": len(self.block_manager.blocks)
+            * self.block_size,
             "prefill_ms_per_token_ewma": self.estimator.prefill_ms_per_token,
             "decode_ms_per_token_ewma": self.estimator.decode_ms_per_token,
         })

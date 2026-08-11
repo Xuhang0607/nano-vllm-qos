@@ -225,6 +225,7 @@ class BlockManager:
         metrics = {
             "prefix_cache_backend": self.prefix_cache_backend,
             "prefix_cache_lookups": self.cache_lookups,
+            "prefix_cache_queried_blocks": self.cache_queried_blocks,
             "prefix_cache_hit_blocks": self.cache_hit_blocks,
             "prefix_cache_evictions": self.cache_evictions,
             "prefix_cache_block_hit_rate": (

@@ -1,0 +1,91 @@
+{
+  "baseline": {
+    "benchmark": "live nano-vLLM serving benchmark",
+    "gpu_measurement": true,
+    "timestamp_utc": "2026-08-11T05:51:18.935923+00:00",
+    "base_url": "http://127.0.0.1:8020",
+    "model": "Qwen3-0.6B",
+    "backend": "CUDA",
+    "hardware": "NVIDIA GeForce RTX 4060 Laptop GPU 8GB",
+    "policy": "fcfs",
+    "prefix_cache_backend": "radix",
+    "max_model_len": 40960,
+    "max_num_seqs": 1,
+    "max_num_batched_tokens": 16384,
+    "kvcache_block_size": 256,
+    "num_kvcache_blocks": 133,
+    "kv_cache_capacity_tokens": 34048,
+    "requests": 8
+  },
+  "candidate": {
+    "benchmark": "live nano-vLLM serving benchmark",
+    "gpu_measurement": true,
+    "timestamp_utc": "2026-08-11T05:52:38.196236+00:00",
+    "base_url": "http://127.0.0.1:8020",
+    "model": "Qwen3-0.6B",
+    "backend": "CUDA",
+    "hardware": "NVIDIA GeForce RTX 4060 Laptop GPU 8GB",
+    "policy": "pals",
+    "prefix_cache_backend": "radix",
+    "max_model_len": 40960,
+    "max_num_seqs": 1,
+    "max_num_batched_tokens": 16384,
+    "kvcache_block_size": 256,
+    "num_kvcache_blocks": 133,
+    "kv_cache_capacity_tokens": 34048,
+    "requests": 8
+  },
+  "overall": {
+    "request_throughput_rps": {
+      "baseline": 0.7831544265992214,
+      "candidate": 0.779936652180599,
+      "change_percent": -0.4108735530737233
+    },
+    "output_throughput_tokens_per_s": {
+      "baseline": 26.627250504373528,
+      "candidate": 26.517846174140367,
+      "change_percent": -0.41087355307372664
+    },
+    "slo_goodput_rps": {
+      "baseline": 0.3915772132996107,
+      "candidate": 0.779936652180599,
+      "change_percent": 99.17825289385256
+    }
+  },
+  "by_class": {
+    "batch": {
+      "ttft_ms_p95": {
+        "baseline": 143.85156549760723,
+        "candidate": 2731.3021325477166,
+        "change_percent": 1798.6947574047417
+      },
+      "e2e_ms_p95": {
+        "baseline": 8678.684695398622,
+        "candidate": 9375.083737349632,
+        "change_percent": 8.024246373649637
+      },
+      "slo_attainment": {
+        "baseline": 1.0,
+        "candidate": 1.0,
+        "change_percent": 0.0
+      }
+    },
+    "interactive": {
+      "ttft_ms_p95": {
+        "baseline": 76.51741924637463,
+        "candidate": 504.7849987004156,
+        "change_percent": 559.6994562441834
+      },
+      "e2e_ms_p95": {
+        "baseline": 8963.875946498229,
+        "candidate": 591.0786241962342,
+        "change_percent": -93.405992812438
+      },
+      "slo_attainment": {
+        "baseline": 0.0,
+        "candidate": 1.0,
+        "change_percent": null
+      }
+    }
+  }
+}

@@ -118,6 +118,8 @@ ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 --scheduling-policy pals          启用优先级与 SLO Slack 调度
 --prefix-cache-backend radix      启用页对齐 Radix 前缀索引
 --max-num-seqs 64                 允许多个请求进入 Continuous Batching
+--max-model-len 40960             请求输入与输出共享的模型原生窗口
+--gpu-memory-utilization 0.90     为完整 40960 窗口分配足够 KV 块
 --kv-storage-backend mooncake     启用 Remote KV 写回与恢复
 --mooncake-global-segment-mib 0   Worker 不承担持久存储角色
 --mooncake-local-buffer-mib 512   KV Page 并发传输的本地 staging 空间
@@ -125,6 +127,10 @@ ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 
 Paged KV Cache 和 Continuous Batching 是 nano-vLLM 引擎本身的执行机制，不需要
 额外开关。PALS、Radix 和 Mooncake 则分别由上面的参数选择。
+
+引擎会在启动后计算 `num_kvcache_blocks * kvcache_block_size`，并把有效上下文限制为
+模型窗口与物理 KV 容量中的较小值。当前 RTX 4060 8GB 在 0.90 下分配 163 个 256-Token
+块，即 41728 Token，因此可以覆盖 Qwen3-0.6B 的 40960 Token 原生窗口。
 
 需要演示优先级排队时，可以临时把并发槽位限制为 1：
 

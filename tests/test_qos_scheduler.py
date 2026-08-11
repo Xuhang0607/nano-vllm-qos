@@ -286,7 +286,12 @@ def test_scheduler_uses_radix_prefix_cache_end_to_end():
     assert scheduled == [second]
     assert second.num_cached_tokens == 4
     assert second.num_scheduled_tokens == 1
-    assert scheduler.metrics()["prefix_cache_hit_blocks"] == 2
+    metrics = scheduler.metrics()
+    assert metrics["prefix_cache_hit_blocks"] == 2
+    assert metrics["max_num_seqs"] == 1
+    assert metrics["kvcache_block_size"] == 2
+    assert metrics["num_kvcache_blocks"] == 16
+    assert metrics["kv_cache_capacity_tokens"] == 32
 
 
 def test_cancel_waiting_request_removes_it_from_scheduler():

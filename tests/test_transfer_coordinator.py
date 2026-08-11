@@ -58,6 +58,7 @@ def test_concurrent_gets_share_one_backend_fetch():
         assert await asyncio.gather(first, second) == [b"kv-data", b"kv-data"]
         assert backend.get_count == 1
         assert coordinator.metrics()["backend_gets"] == 1
+        assert coordinator.metrics()["backend_get_bytes"] == len(b"kv-data")
         assert coordinator.metrics()["coalesced_gets"] == 1
         assert (await coordinator.snapshot("page")).state == KVTransferState.RESIDENT
 
@@ -139,6 +140,7 @@ def test_get_joins_an_inflight_write_and_close_rejects_new_work():
         await write
         assert await fetched == b"fresh-kv"
         assert coordinator.metrics()["backend_gets"] == 0
+        assert coordinator.metrics()["backend_put_bytes"] == len(b"fresh-kv")
 
         await coordinator.close()
         with pytest.raises(RuntimeError, match="closed"):

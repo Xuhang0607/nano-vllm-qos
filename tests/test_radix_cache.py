@@ -111,6 +111,7 @@ def test_block_manager_reuses_radix_prefix_blocks():
     assert second.num_cached_tokens == 4
     assert second.block_table[:2] == first_block_ids[:2]
     metrics = manager.cache_metrics()
+    assert metrics["prefix_cache_queried_blocks"] == 4
     assert metrics["prefix_cache_hit_blocks"] == 2
     assert metrics["prefix_cache_block_hit_rate"] == 0.5
     manager.radix_cache.validate()

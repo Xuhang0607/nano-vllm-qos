@@ -7,7 +7,7 @@ import torch.multiprocessing as mp
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 
-from nanovllm.config import Config
+from nanovllm.config import Config, effective_context_window
 from nanovllm.engine.hierarchical_cache import (
     CacheTier,
     KVCacheGeometry,
@@ -57,6 +57,11 @@ class LLMEngine:
             self.ps.append(process)
             self.events.append(event)
         self.model_runner = ModelRunner(config, 0, self.events)
+        config.max_model_len = effective_context_window(
+            config.max_model_len,
+            config.num_kvcache_blocks,
+            config.kvcache_block_size,
+        )
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         config.eos = self.tokenizer.eos_token_id
         self.kv_cache_identity = KVCacheIdentity(

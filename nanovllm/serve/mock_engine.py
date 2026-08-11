@@ -123,6 +123,12 @@ class MockEngine:
         return {
             "policy": "pals",
             "max_model_len": 40960,
+            "requested_max_model_len": 40960,
+            "max_num_seqs": 8,
+            "max_num_batched_tokens": 2048,
+            "kvcache_block_size": 256,
+            "num_kvcache_blocks": 32,
+            "kv_cache_capacity_tokens": 8192,
             "completed_requests": self._completed_count,
             "cancelled_requests": self._cancelled_count,
             "waiting_requests": 0,
@@ -135,6 +141,7 @@ class MockEngine:
             "e2e_ms_p95": 0.0,
             "prefix_cache_backend": "radix",
             "prefix_cache_lookups": self._cache_lookups,
+            "prefix_cache_queried_blocks": self._cache_lookups,
             "prefix_cache_hit_blocks": self._cache_hits,
             "prefix_cache_block_hit_rate": (
                 self._cache_hits / self._cache_lookups if self._cache_lookups else 0.0

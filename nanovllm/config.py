@@ -1,7 +1,17 @@
-import os
-from dataclasses import dataclass
+from __future__ import annotations
 
-from transformers import AutoConfig
+import os
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from transformers import AutoConfig
+
+
+def effective_context_window(max_model_len: int, num_blocks: int, block_size: int):
+    if max_model_len <= 0 or num_blocks <= 0 or block_size <= 0:
+        raise ValueError("context and KV cache dimensions must be positive")
+    return min(max_model_len, num_blocks * block_size)
 
 
 @dataclass(slots=True)
@@ -10,6 +20,7 @@ class Config:
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
     max_model_len: int = 40960
+    requested_max_model_len: int = field(init=False)
     gpu_memory_utilization: float = 0.9
     tensor_parallel_size: int = 1
     enforce_eager: bool = False
@@ -37,6 +48,8 @@ class Config:
     remote_kv_catalog_timeout_s: float = 10.0
 
     def __post_init__(self):
+        from transformers import AutoConfig
+
         assert os.path.isdir(self.model)
         assert self.kvcache_block_size % 256 == 0
         assert self.prefix_cache_backend in ("hash", "radix")
@@ -54,6 +67,7 @@ class Config:
         assert self.remote_kv_congestion_multiplier >= 1
         assert self.remote_kv_min_prefix_blocks >= 1
         assert self.remote_kv_catalog_timeout_s > 0
+        self.requested_max_model_len = self.max_model_len
         self.hf_config = AutoConfig.from_pretrained(self.model)
         if self.kv_cache_model_id is None:
             self.kv_cache_model_id = getattr(
@@ -61,4 +75,6 @@ class Config:
                 "_name_or_path",
                 self.model,
             )
-        self.max_model_len = min(self.max_model_len, self.hf_config.max_position_embeddings)
+        self.max_model_len = min(
+            self.max_model_len, self.hf_config.max_position_embeddings
+        )
