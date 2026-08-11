@@ -366,6 +366,10 @@ bash scripts/run_mooncake_wsl.sh store
 ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 ```
 
+Qwen3-0.6B exposes its native 40,960-token context window by default. Prompt and
+output tokens share that limit. Set an override such as `MAX_MODEL_LEN=4096`
+when a smaller memory footprint or higher concurrency matters more.
+
 Open `http://127.0.0.1:8020/` for the web console. The validated restart test
 wrote eight Qwen3 KV pages, restarted only the GPU worker, loaded the persistent
 catalog, and restored 2,048 cached tokens with zero remote I/O failures. The

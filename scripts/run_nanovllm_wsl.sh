@@ -7,6 +7,7 @@ VENV_DIR="${VENV_DIR:-/home/xuhang/.venvs/nanovllm-qos}"
 PORT="${PORT:-8020}"
 SCHEDULING_POLICY="${SCHEDULING_POLICY:-pals}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-64}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-40960}"
 
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.9}"
 export PATH="$CUDA_HOME/bin:$VENV_DIR/bin:$PATH"
@@ -32,7 +33,7 @@ exec "$VENV_DIR/bin/python" -m nanovllm.serve \
   --served-model-name Qwen3-0.6B \
   --scheduling-policy "$SCHEDULING_POLICY" \
   --prefix-cache-backend radix \
-  --max-model-len 4096 \
+  --max-model-len "${MAX_MODEL_LEN}" \
   --max-num-seqs "$MAX_NUM_SEQS" \
   --gpu-memory-utilization 0.80 \
   --enforce-eager \

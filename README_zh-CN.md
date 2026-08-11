@@ -325,6 +325,9 @@ bash scripts/run_mooncake_wsl.sh store
 ENABLE_MOONCAKE=1 bash scripts/run_nanovllm_wsl.sh
 ```
 
+Qwen3-0.6B 默认开放模型原生的 `40960` Token 上下文窗口；输入与输出 Token 总数不能
+超过该值。显存较小或需要更高并发时，可通过 `MAX_MODEL_LEN=4096` 等环境变量降低上限。
+
 浏览器打开 `http://127.0.0.1:8020/`。本机重启实验写回 8 个 Qwen3 KV Page，只重启
 GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远端 I/O 失败数为
 0。当前验证使用 WSL2 单机 TCP，RDMA 和多机性能仍属于后续工作。完整安装、原理、

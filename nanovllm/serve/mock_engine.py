@@ -122,7 +122,7 @@ class MockEngine:
     def get_scheduler_metrics(self):
         return {
             "policy": "pals",
-            "max_model_len": 4096,
+            "max_model_len": 40960,
             "completed_requests": self._completed_count,
             "cancelled_requests": self._cancelled_count,
             "waiting_requests": 0,

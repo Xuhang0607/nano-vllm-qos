@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument(
         "--prefix-cache-backend", choices=("hash", "radix"), default="radix"
     )
-    parser.add_argument("--max-model-len", type=int, default=4096)
+    parser.add_argument("--max-model-len", type=int, default=40960)
     parser.add_argument("--max-num-seqs", type=int, default=256)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--enforce-eager", action="store_true")
