@@ -46,6 +46,15 @@ CONFIG_FIELDS = (
     "hardware",
     "policy",
     "prefix_cache_backend",
+    "kv_reclaim_policy",
+    "kv_compression_policy",
+    "kv_compression_sink_blocks",
+    "kv_compression_recent_blocks",
+    "kv_compression_importance_blocks",
+    "kv_compression_query_tokens",
+    "kv_compression_trigger_free_ratio",
+    "num_kvcache_blocks",
+    "num_kvcache_blocks_override",
     "max_num_seqs",
     "max_model_len",
     "remote_kv_cost_aware",
@@ -56,12 +65,15 @@ CONFIG_FIELDS = (
     "warmup_enabled",
     "gpu_sampling_interval_ms",
     "requests",
+    "workload_parameters",
 )
 CROSS_GROUP_FIELDS = (
     "model",
     "hardware",
     "max_num_seqs",
     "max_model_len",
+    "num_kvcache_blocks",
+    "num_kvcache_blocks_override",
     "workload_fingerprint",
     "workload_label",
     "interactive_delay_ms",
@@ -69,6 +81,7 @@ CROSS_GROUP_FIELDS = (
     "warmup_enabled",
     "gpu_sampling_interval_ms",
     "requests",
+    "workload_parameters",
 )
 
 
@@ -96,6 +109,7 @@ def summarize_values(values):
 
 
 def _run_metrics(run):
+    request_metrics = [item.get("metrics", {}) for item in run.get("requests", [])]
     metrics = {
         "overall.request_throughput_rps": run["overall"]["request_throughput_rps"],
         "overall.output_throughput_tokens_per_s": run["overall"][
@@ -117,6 +131,36 @@ def _run_metrics(run):
         "remote.backend_put_bytes": run["metric_deltas"][
             "remote_io_backend_put_bytes"
         ],
+        "kv.preemptions": sum(item.get("preemptions", 0) for item in request_metrics),
+        "kv.reclaim_events": sum(
+            item.get("kv_reclaim_events", 0) for item in request_metrics
+        ),
+        "kv.reclaimed_blocks": sum(
+            item.get("kv_reclaimed_blocks", 0) for item in request_metrics
+        ),
+        "kv.retained_blocks": sum(
+            item.get("kv_retained_blocks", 0) for item in request_metrics
+        ),
+        "kv.invalidated_tokens": sum(
+            item.get("kv_invalidated_tokens", 0) for item in request_metrics
+        ),
+        "kv.recomputed_tokens": sum(
+            item.get("kv_recomputed_tokens", 0) for item in request_metrics
+        ),
+        "kv.forced_fallbacks": run["metric_deltas"].get(
+            "kv_reclaim_forced_fallbacks", 0
+        ),
+        "kv.compression_events": sum(
+            item.get("kv_compression_events", 0) for item in request_metrics
+        ),
+        "kv.compression_dropped_blocks": sum(
+            item.get("kv_compression_dropped_blocks", 0)
+            for item in request_metrics
+        ),
+        "kv.compression_dropped_tokens": sum(
+            item.get("kv_compression_dropped_tokens", 0)
+            for item in request_metrics
+        ),
     }
     for class_name, summary in run["by_class"].items():
         for latency in ("ttft_ms", "tpot_ms", "e2e_ms"):

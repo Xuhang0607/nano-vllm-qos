@@ -63,6 +63,31 @@ def test_build_workload_has_fixed_classes_priorities_and_arrivals():
     assert description["interactive_arrival_rate_rps"] == 10
 
 
+def test_build_workload_can_add_request_private_pressure_context():
+    workload = build_workload(
+        2,
+        0,
+        "pressure",
+        shared_prefix_repeats=2,
+        batch_unique_repeats=3,
+    )
+
+    assert workload[0].messages[0][1] == workload[1].messages[0][1]
+    assert "private-0-0002" in workload[0].messages[1][1]
+    assert "private-1-0002" in workload[1].messages[1][1]
+    assert workload[0].messages[1][1] != workload[1].messages[1][1]
+
+    interactive = build_workload(
+        0,
+        2,
+        "pressure",
+        shared_prefix_repeats=2,
+        interactive_unique_repeats=3,
+    )
+    assert "interactive-0-0002" in interactive[0].messages[0][1]
+    assert "interactive-1-0002" in interactive[1].messages[0][1]
+
+
 def test_gpu_sample_parser_and_summary_handle_optional_power():
     first = parse_nvidia_smi_sample(
         "0, NVIDIA GeForce RTX 4060 Laptop GPU, 75, 7000, 8188, 88.5"
@@ -116,12 +141,16 @@ def test_metric_deltas_isolate_cache_and_remote_io_for_one_run():
         "prefix_cache_hit_blocks": 4,
         "remote_io_backend_get_bytes": 100,
         "remote_io_backend_put_bytes": 200,
+        "kv_reclaim_events": 2,
+        "kv_reclaim_freed_blocks": 3,
     }
     after = {
         "prefix_cache_queried_blocks": 30,
         "prefix_cache_hit_blocks": 14,
         "remote_io_backend_get_bytes": 500,
         "remote_io_backend_put_bytes": 800,
+        "kv_reclaim_events": 7,
+        "kv_reclaim_freed_blocks": 11,
     }
 
     delta = metric_deltas(before, after)
@@ -132,6 +161,8 @@ def test_metric_deltas_isolate_cache_and_remote_io_for_one_run():
     assert delta["remote_io_backend_get_bytes"] == 400
     assert delta["remote_io_backend_put_bytes"] == 600
     assert delta["remote_io_transfer_bytes"] == 1000
+    assert delta["kv_reclaim_events"] == 5
+    assert delta["kv_reclaim_freed_blocks"] == 8
 
 
 def test_write_results_creates_json_and_flat_request_csv(tmp_path):

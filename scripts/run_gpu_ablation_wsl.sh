@@ -5,6 +5,7 @@ PROJECT_DIR="${PROJECT_DIR:-/mnt/d/nano-vllm-qos}"
 VENV_DIR="${VENV_DIR:-/home/xuhang/.venvs/nanovllm-qos}"
 RESULTS_DIR="${RESULTS_DIR:-$PROJECT_DIR/benchmarks/results/repeated}"
 REPEATS="${REPEATS:-3}"
+QUALITY_MAX_TOKENS="${QUALITY_MAX_TOKENS:-64}"
 HARDWARE="${HARDWARE:-NVIDIA GeForce RTX 4060 Laptop GPU 8GB}"
 SUITE="${1:-prefix}"
 SERVER_PID=""
@@ -30,13 +31,15 @@ wait_server() {
   local policy="$1"
   local prefix="$2"
   local backend_fragment="$3"
-  "$VENV_DIR/bin/python" - "$policy" "$prefix" "$backend_fragment" <<'PY'
+  local reclaim_policy="${4:-}"
+  local kv_blocks="${5:-}"
+  "$VENV_DIR/bin/python" - "$policy" "$prefix" "$backend_fragment" "$reclaim_policy" "$kv_blocks" <<'PY'
 import json
 import sys
 import time
 import urllib.request
 
-policy, prefix, backend_fragment = sys.argv[1:]
+policy, prefix, backend_fragment, reclaim_policy, kv_blocks = sys.argv[1:]
 deadline = time.monotonic() + 600
 last_error = None
 while time.monotonic() < deadline:
@@ -48,6 +51,14 @@ while time.monotonic() < deadline:
             and metrics.get("policy") == policy
             and metrics.get("prefix_cache_backend") == prefix
             and backend_fragment in metrics.get("backend", "")
+            and (
+                not reclaim_policy
+                or metrics.get("kv_reclaim_policy") == reclaim_policy
+            )
+            and (
+                not kv_blocks
+                or metrics.get("num_kvcache_blocks") == int(kv_blocks)
+            )
         ):
             print(
                 f"ready policy={policy} prefix={prefix} "
@@ -68,6 +79,17 @@ start_worker() {
   local mooncake="$4"
   local max_num_seqs="$5"
   local force_restore="${6:-0}"
+  local reclaim_policy="${7:-slo_aware}"
+  local kv_blocks="${8:-}"
+  local min_keep_ratio="${9:-0.0}"
+  local max_keep_ratio="${10:-0.75}"
+  local budget_scale_ms="${11:-1000}"
+  local compression_policy="${12:-none}"
+  local compression_sink_blocks="${13:-1}"
+  local compression_recent_blocks="${14:-8}"
+  local compression_importance_blocks="${15:-2}"
+  local compression_query_tokens="${16:-64}"
+  local compression_trigger_ratio="${17:-0.15}"
   stop_worker
   env \
     SCHEDULING_POLICY="$policy" \
@@ -76,6 +98,17 @@ start_worker() {
     GPU_MEMORY_UTILIZATION=0.80 \
     ENABLE_MOONCAKE="$mooncake" \
     REMOTE_KV_FORCE_RESTORE="$force_restore" \
+    KV_RECLAIM_POLICY="$reclaim_policy" \
+    KV_RECLAIM_MIN_KEEP_RATIO="$min_keep_ratio" \
+    KV_RECLAIM_MAX_KEEP_RATIO="$max_keep_ratio" \
+    KV_RECLAIM_BUDGET_SCALE_MS="$budget_scale_ms" \
+    NUM_KVCACHE_BLOCKS="$kv_blocks" \
+    KV_COMPRESSION_POLICY="$compression_policy" \
+    KV_COMPRESSION_SINK_BLOCKS="$compression_sink_blocks" \
+    KV_COMPRESSION_RECENT_BLOCKS="$compression_recent_blocks" \
+    KV_COMPRESSION_IMPORTANCE_BLOCKS="$compression_importance_blocks" \
+    KV_COMPRESSION_QUERY_TOKENS="$compression_query_tokens" \
+    KV_COMPRESSION_TRIGGER_FREE_RATIO="$compression_trigger_ratio" \
     bash scripts/run_nanovllm_wsl.sh \
     >"$PROJECT_DIR/ablation-$name.stdout.log" \
     2>"$PROJECT_DIR/ablation-$name.stderr.log" &
@@ -84,7 +117,7 @@ start_worker() {
   if [[ "$mooncake" == "1" ]]; then
     backend="Mooncake"
   fi
-  wait_server "$policy" "$prefix" "$backend"
+  wait_server "$policy" "$prefix" "$backend" "$reclaim_policy" "$kv_blocks"
 }
 
 restore_full_service() {
@@ -254,10 +287,107 @@ run_remote_suite() {
     "${local_files[@]}" -- "${remote_files[@]}"
 }
 
+run_kv_reclaim_suite() {
+  local recompute_files=()
+  local slo_files=()
+  local common_args=(
+    --batch-requests 4
+    --interactive-requests 4
+    --shared-prefix-repeats 8
+    --batch-unique-repeats 64
+    --interactive-unique-repeats 16
+    --interactive-delay-ms 100
+    --batch-output-tokens 256
+    --interactive-output-tokens 8
+    --timeout-s 300
+    --workload-label kv-burst-18
+  )
+  for run in $(seq 1 "$REPEATS"); do
+    start_worker "kv-recompute-$run" pals radix 0 8 0 recompute 18
+    local recompute="$RESULTS_DIR/kv-recompute-$run.json"
+    run_benchmark "$recompute" kv-burst-18-v1 "${common_args[@]}"
+    recompute_files+=("$recompute")
+
+    start_worker "kv-slo-aware-$run" pals radix 0 8 0 slo_aware 18 0.40 0.40 10000
+    local slo="$RESULTS_DIR/kv-slo-aware-$run.json"
+    run_benchmark "$slo" kv-burst-18-v1 "${common_args[@]}"
+    slo_files+=("$slo")
+  done
+  aggregate_groups Recompute SLO-Aware-KV kv-recompute-vs-slo-aware \
+    "${recompute_files[@]}" -- "${slo_files[@]}"
+}
+
+run_kv_compression_suite() {
+  local baseline_files=()
+  local query_files=()
+  local common_args=(
+    --batch-requests 4
+    --interactive-requests 4
+    --shared-prefix-repeats 8
+    --batch-unique-repeats 64
+    --interactive-unique-repeats 16
+    --interactive-delay-ms 100
+    --batch-output-tokens 256
+    --interactive-output-tokens 8
+    --timeout-s 300
+    --workload-label kv-compression-18
+  )
+  for run in $(seq 1 "$REPEATS"); do
+    start_worker "compression-none-$run" pals radix 0 8 0 recompute 18 \
+      0.0 0.75 1000 none
+    local baseline="$RESULTS_DIR/compression-none-$run.json"
+    run_benchmark "$baseline" kv-compression-18-v1 "${common_args[@]}"
+    baseline_files+=("$baseline")
+
+    start_worker "compression-query-$run" pals radix 0 8 0 recompute 18 \
+      0.0 0.75 1000 query_aware 1 2 2 64 1.0
+    local query="$RESULTS_DIR/compression-query-$run.json"
+    run_benchmark "$query" kv-compression-18-v1 "${common_args[@]}"
+    query_files+=("$query")
+  done
+  aggregate_groups No-Compression Query-Aware-KV kv-compression-none-vs-query \
+    "${baseline_files[@]}" -- "${query_files[@]}"
+}
+
+run_kv_quality_suite() {
+  local none="$RESULTS_DIR/kv-quality-none-${QUALITY_MAX_TOKENS}.json"
+  local sink="$RESULTS_DIR/kv-quality-sink-recent-${QUALITY_MAX_TOKENS}.json"
+  local query="$RESULTS_DIR/kv-quality-query-aware-${QUALITY_MAX_TOKENS}.json"
+  local quality_args=(
+    --filler-lines 96
+    --repeats-per-position 3
+    --max-tokens "$QUALITY_MAX_TOKENS"
+    --timeout-s 300
+  )
+
+  start_worker quality-none pals radix 0 8 0 recompute 24 \
+    0.0 0.75 1000 none
+  "$VENV_DIR/bin/python" -m benchmarks.benchmark_kv_quality \
+    "${quality_args[@]}" --output-json "$none"
+
+  start_worker quality-sink pals radix 0 8 0 recompute 24 \
+    0.0 0.75 1000 sink_recent 1 2 1 64 1.0
+  "$VENV_DIR/bin/python" -m benchmarks.benchmark_kv_quality \
+    "${quality_args[@]}" --output-json "$sink"
+
+  start_worker quality-query pals radix 0 8 0 recompute 24 \
+    0.0 0.75 1000 query_aware 1 2 2 64 1.0
+  "$VENV_DIR/bin/python" -m benchmarks.benchmark_kv_quality \
+    "${quality_args[@]}" --output-json "$query"
+
+  "$VENV_DIR/bin/python" -m benchmarks.compare_kv_quality \
+    --runs "$none" "$sink" "$query" \
+    --output-json "$RESULTS_DIR/kv-quality-comparison-${QUALITY_MAX_TOKENS}.json" \
+    --output-markdown "$RESULTS_DIR/kv-quality-comparison-${QUALITY_MAX_TOKENS}.md"
+}
+
 case "$SUITE" in
   scheduler) run_scheduler_suite ;;
   pressure) run_pressure_suite ;;
   prefix) run_prefix_suite ;;
   remote) run_remote_suite ;;
-  *) echo "usage: $0 {scheduler|pressure|prefix|remote}" >&2; exit 2 ;;
+  kv-reclaim) run_kv_reclaim_suite ;;
+  kv-compression) run_kv_compression_suite ;;
+  kv-quality) run_kv_quality_suite ;;
+  *) echo "usage: $0 {scheduler|pressure|prefix|remote|kv-reclaim|kv-compression|kv-quality}" >&2; exit 2 ;;
 esac

@@ -233,3 +233,58 @@ TTFT 和 E2E 会增加，但 Batch 仍满足本实验的 30 秒 E2E SLO。这体
 都会同时改善。
 
 ![PALS 多到达率 GPU 压力曲线](../assets/pals-pressure.svg)
+
+## 11. KV 回收与重计算实验
+
+```bash
+REPEATS=3 bash scripts/run_gpu_ablation_wsl.sh kv-reclaim
+```
+
+脚本使用显式 `NUM_KVCACHE_BLOCKS` 构造可重复的 KV 压力。若不显式限制，nano-vLLM 会在
+启动时按剩余显存重新计算 Block 数，8GB 显卡上的短测试不一定发生抢占，无法验证回收路径。
+
+| 指标 | 全量重计算 | SLO-Aware 回收 | 均值变化 |
+| --- | ---: | ---: | ---: |
+| 失效 Token | 1706.3 | 1109.0 | -35.0% |
+| 实际重计算 Token | 1194.3 | 1023.7 | -14.3% |
+| 请求吞吐 | 0.449 req/s | 0.417 req/s | -7.3% |
+| Interactive E2E p95 | 1008.1 ms | 1166.0 ms | +15.7% |
+
+实现过程中还发现：只保留请求自己的连续前缀，会漏掉它等待期间由其他请求写入 Radix 的
+可复用后缀。恢复时增加 Radix 后缀重挂接后，才真正减少实际 Prefill Token。另一个边界是
+不能为了恢复当前请求继续抢占同一个 Scheduling Step 已选中的请求，否则会产生状态冲突；
+当前实现选择等待下一步，并在长期无进展时退化为全量回收。
+
+该实验是有价值的负结果：机制确实减少重计算，但额外恢复与调度开销抵消了收益。后续需要
+CUDA Kernel 时间分解和更长 Prefill 负载，而不是在简历中只选择 `-14.3%` 一项指标。
+
+## 12. Query-Aware KV 压缩与质量实验
+
+```bash
+REPEATS=3 bash scripts/run_gpu_ablation_wsl.sh kv-compression
+bash scripts/run_gpu_ablation_wsl.sh kv-quality
+```
+
+压缩实验固定 18 个 KV Block、相同到达轨迹和输出长度，只切换 `none` 与 `query_aware`。
+性能结果：
+
+| 指标 | 不压缩 | Query-Aware | 均值变化 |
+| --- | ---: | ---: | ---: |
+| 请求吞吐 | 0.507 req/s | 0.862 req/s | +70.1% |
+| 输出吞吐 | 66.228 token/s | 112.731 token/s | +70.2% |
+| Batch E2E p95 | 14660.0 ms | 9170.9 ms | -37.4% |
+| Interactive E2E p95 | 816.2 ms | 744.2 ms | -8.8% |
+
+每轮发生 4 次压缩并丢弃 1024 个物理 KV Token；两组抢占和重计算计数相同。质量探针把
+唯一证据放在 Prompt 前、中、后三个位置，各重复 3 次：
+
+| 策略 | 准确率 | 累计 KV Token 丢弃比例 |
+| --- | ---: | ---: |
+| none | 9/9 | 0.0% |
+| sink_recent | 0/9 | 67.6% |
+| query_aware | 9/9 | 40.5% |
+
+`sink_recent` 的失败说明只保留开头和最近窗口会删除中间证据；Query-Aware 利用尾部 Query
+Token 与历史页重合度保留相关页。评测使用 `/no_think` 并严格校验最终答案，避免答案只在
+思考区出现仍被计为正确。该探针规模有限，只能作为算法方向验证。完整机制与可信
+表述见 [Query-Aware KV 压缩设计](query_aware_kv_compression_zh.md)。

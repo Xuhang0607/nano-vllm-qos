@@ -43,6 +43,7 @@ class BlockManager:
         self.free_block_ids: deque[int] = deque(range(num_blocks))
         self.used_block_ids: set[int] = set()
         self.pending_matches: dict[int, list[int]] = {}
+        self.pending_resume_matches: dict[int, list[int]] = {}
         self.cache_lookups = 0
         self.cache_queried_blocks = 0
         self.cache_hit_blocks = 0
@@ -124,6 +125,9 @@ class BlockManager:
         self.pending_matches[seq.seq_id] = cached_block_ids
         return len(cached_block_ids)
 
+    def cached_prefix_blocks(self, seq: Sequence) -> int:
+        return len(self._lookup_cached_blocks(seq))
+
     def allocate(self, seq: Sequence, num_cached_blocks: int):
         assert not seq.block_table
         cached_block_ids = self.pending_matches.pop(seq.seq_id, None)
@@ -142,7 +146,9 @@ class BlockManager:
             seq.block_table.append(block_id)
         for i in range(num_cached_blocks, seq.num_blocks):
             seq.block_table.append(self._allocate_block())
+        seq.kv_block_logical_indices = list(range(seq.num_blocks))
         seq.num_cached_tokens = num_cached_blocks * self.block_size
+        seq.num_physical_cached_tokens = seq.num_cached_tokens
 
     def reserve_restore(
         self,
@@ -181,19 +187,204 @@ class BlockManager:
                 block.update(previous_hash, token_ids)
                 self.hash_to_block_id[previous_hash] = block.block_id
         seq.num_cached_tokens = num_cached_blocks * self.block_size
+        seq.num_physical_cached_tokens = seq.num_cached_tokens
 
     def abort_restore(self, seq: Sequence):
         if seq.block_table:
             self.deallocate(seq)
 
     def deallocate(self, seq: Sequence):
+        self.pending_resume_matches.pop(seq.seq_id, None)
         for block_id in reversed(seq.block_table):
             block = self.blocks[block_id]
             block.ref_count -= 1
             if block.ref_count == 0:
                 self._deallocate_block(block_id)
         seq.num_cached_tokens = 0
+        seq.num_physical_cached_tokens = 0
+        seq.kv_compressed = False
         seq.block_table.clear()
+        seq.kv_block_logical_indices.clear()
+
+    def reclaim_suffix(self, seq: Sequence, keep_blocks: int) -> int:
+        """Release a suffix while preserving a complete, contiguous KV prefix."""
+        if not 0 <= keep_blocks <= len(seq.block_table):
+            raise ValueError("keep_blocks must be within the owned block table")
+        if keep_blocks * self.block_size > seq.num_cached_tokens:
+            raise ValueError("cannot retain blocks containing uncomputed KV tokens")
+
+        free_before = len(self.free_block_ids)
+        self.pending_resume_matches.pop(seq.seq_id, None)
+        released = seq.block_table[keep_blocks:]
+        for block_id in reversed(released):
+            block = self.blocks[block_id]
+            block.ref_count -= 1
+            if block.ref_count == 0:
+                self._deallocate_block(block_id)
+        del seq.block_table[keep_blocks:]
+        del seq.kv_block_logical_indices[keep_blocks:]
+        seq.num_cached_tokens = keep_blocks * self.block_size
+        seq.num_physical_cached_tokens = seq.num_cached_tokens
+        return len(self.free_block_ids) - free_before
+
+    def can_resume(self, seq: Sequence) -> bool:
+        missing_blocks = seq.num_blocks - len(seq.block_table)
+        if missing_blocks < 0:
+            raise RuntimeError("request owns more KV blocks than its sequence needs")
+        cached_block_ids = self._lookup_cached_blocks(seq)
+        retained_blocks = len(seq.block_table)
+        if cached_block_ids[:retained_blocks] != seq.block_table:
+            cached_suffix = []
+        else:
+            cached_suffix = cached_block_ids[
+                retained_blocks : retained_blocks + missing_blocks
+            ]
+        already_used = sum(
+            block_id in self.used_block_ids for block_id in cached_suffix
+        )
+        if len(self.free_block_ids) < missing_blocks - already_used:
+            self.pending_resume_matches.pop(seq.seq_id, None)
+            return False
+        self.pending_resume_matches[seq.seq_id] = cached_suffix
+        return True
+
+    def resume(self, seq: Sequence) -> int:
+        cached_suffix = self.pending_resume_matches.pop(seq.seq_id, None)
+        if cached_suffix is None:
+            if not self.can_resume(seq):
+                raise RuntimeError("insufficient KV blocks to resume request")
+            cached_suffix = self.pending_resume_matches.pop(seq.seq_id)
+        for block_id in cached_suffix:
+            block = self.blocks[block_id]
+            if block_id in self.used_block_ids:
+                block.ref_count += 1
+            else:
+                self.free_block_ids.remove(block_id)
+                self.used_block_ids.add(block_id)
+                block.ref_count = 1
+            seq.block_table.append(block_id)
+            seq.kv_block_logical_indices.append(
+                len(seq.kv_block_logical_indices)
+            )
+        reused_tokens = len(cached_suffix) * self.block_size
+        seq.num_cached_tokens += reused_tokens
+        seq.num_physical_cached_tokens += reused_tokens
+        while len(seq.block_table) < seq.num_blocks:
+            seq.block_table.append(self._allocate_block())
+            seq.kv_block_logical_indices.append(
+                len(seq.kv_block_logical_indices)
+            )
+        return reused_tokens
+
+    def _compress_keep_positions(
+        self,
+        seq: Sequence,
+        keep_positions: set[int],
+    ) -> tuple[int, int, int]:
+        dropped_positions = [
+            index
+            for index in range(len(seq.block_table))
+            if index not in keep_positions
+        ]
+        if not dropped_positions:
+            return 0, 0, 0
+        free_before = len(self.free_block_ids)
+        for index in reversed(dropped_positions):
+            block_id = seq.block_table[index]
+            block = self.blocks[block_id]
+            block.ref_count -= 1
+            if block.ref_count == 0:
+                self._deallocate_block(block_id)
+        seq.block_table = [
+            block_id
+            for index, block_id in enumerate(seq.block_table)
+            if index in keep_positions
+        ]
+        seq.kv_block_logical_indices = [
+            logical_index
+            for index, logical_index in enumerate(seq.kv_block_logical_indices)
+            if index in keep_positions
+        ]
+        dropped_tokens = min(
+            len(dropped_positions) * self.block_size,
+            seq.num_physical_cached_tokens,
+        )
+        seq.num_physical_cached_tokens -= dropped_tokens
+        seq.kv_compressed = True
+        return (
+            len(dropped_positions),
+            len(self.free_block_ids) - free_before,
+            dropped_tokens,
+        )
+
+    def compress_sink_recent(
+        self,
+        seq: Sequence,
+        sink_blocks: int,
+        recent_blocks: int,
+    ) -> tuple[int, int, int]:
+        """Drop full middle KV pages while retaining sink and recent pages."""
+        if sink_blocks < 1 or recent_blocks < 1:
+            raise ValueError("sink and recent windows must each keep at least one block")
+        keep_limit = sink_blocks + recent_blocks
+        if len(seq.block_table) <= keep_limit:
+            return 0, 0, 0
+
+        recent_start = max(sink_blocks, len(seq.block_table) - recent_blocks)
+        dropped_positions = set(range(sink_blocks, recent_start))
+        if not dropped_positions:
+            return 0, 0, 0
+        keep_positions = set(range(len(seq.block_table))) - dropped_positions
+        return self._compress_keep_positions(seq, keep_positions)
+
+    def compress_query_aware(
+        self,
+        seq: Sequence,
+        sink_blocks: int,
+        recent_blocks: int,
+        importance_blocks: int,
+        query_tokens: int,
+    ) -> tuple[int, int, int]:
+        if importance_blocks < 1 or query_tokens < 1:
+            raise ValueError("importance blocks and query token window must be positive")
+        base_keep = sink_blocks + recent_blocks
+        if len(seq.block_table) <= base_keep + importance_blocks:
+            return 0, 0, 0
+
+        sink_positions = set(range(min(sink_blocks, len(seq.block_table))))
+        recent_start = max(len(sink_positions), len(seq.block_table) - recent_blocks)
+        recent_positions = set(range(recent_start, len(seq.block_table)))
+        candidate_positions = [
+            index
+            for index in range(len(seq.block_table))
+            if index not in sink_positions and index not in recent_positions
+        ]
+        query_ids = set(seq.prompt_token_ids[-query_tokens:])
+        document_frequency = {}
+        candidate_tokens = {}
+        for position in candidate_positions:
+            logical_index = seq.kv_block_logical_indices[position]
+            tokens = set(seq.block(logical_index))
+            candidate_tokens[position] = tokens
+            for token_id in tokens:
+                document_frequency[token_id] = document_frequency.get(token_id, 0) + 1
+
+        scored = []
+        for position, tokens in candidate_tokens.items():
+            score = sum(
+                1.0 / document_frequency[token_id]
+                for token_id in tokens & query_ids
+            )
+            scored.append((score, -position, position))
+        important_positions = {
+            position
+            for score, _negative_position, position in sorted(
+                scored, reverse=True
+            )[:importance_blocks]
+            if score > 0
+        }
+        keep_positions = sink_positions | recent_positions | important_positions
+        return self._compress_keep_positions(seq, keep_positions)
 
     def can_append(self, seq: Sequence) -> bool:
         return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
@@ -201,8 +392,11 @@ class BlockManager:
     def may_append(self, seq: Sequence):
         if len(seq) % self.block_size == 1:
             seq.block_table.append(self._allocate_block())
+            seq.kv_block_logical_indices.append(seq.num_blocks - 1)
 
     def hash_blocks(self, seq: Sequence):
+        if seq.kv_compressed:
+            return
         start = seq.num_cached_tokens // self.block_size
         end = (seq.num_cached_tokens + seq.num_scheduled_tokens) // self.block_size
         if start == end: return

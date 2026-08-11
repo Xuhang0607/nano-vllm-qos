@@ -4,6 +4,11 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from nanovllm.engine.block_manager import BlockManager
+from nanovllm.engine.kv_reclaim import (
+    KVReclaimDecision,
+    KVReclaimPolicy,
+    create_kv_reclaim_policy,
+)
 from nanovllm.engine.qos import ExecutionTimeEstimator, create_policy, summarize_metrics
 from nanovllm.engine.sequence import Sequence, SequenceStatus
 
@@ -39,6 +44,9 @@ class Scheduler:
         )
         self.eos = config.eos
         self.block_size = config.kvcache_block_size
+        self.num_kvcache_blocks_override = getattr(
+            config, "num_kvcache_blocks_override", None
+        )
         self.block_manager = BlockManager(
             config.num_kvcache_blocks,
             config.kvcache_block_size,
@@ -56,6 +64,43 @@ class Scheduler:
         self.policy_name = config.scheduling_policy
         self.remote_kv_cost_aware = getattr(config, "remote_kv_cost_aware", True)
         self.policy = create_policy(self.policy_name, self.estimator, config)
+        self.kv_reclaim_policy_name = getattr(
+            config, "kv_reclaim_policy", "slo_aware"
+        )
+        self.kv_reclaim_policy = create_kv_reclaim_policy(
+            self.kv_reclaim_policy_name, config
+        )
+        self.kv_reclaim_target_free_blocks = getattr(
+            config, "kv_reclaim_target_free_blocks", 2
+        )
+        self.kv_reclaim_events = 0
+        self.kv_reclaim_requested_blocks = 0
+        self.kv_reclaim_freed_blocks = 0
+        self.kv_reclaim_retained_blocks = 0
+        self.kv_reclaim_invalidated_tokens = 0
+        self.kv_reclaim_forced_fallbacks = 0
+        self.kv_compression_policy = getattr(
+            config, "kv_compression_policy", "none"
+        )
+        self.kv_compression_sink_blocks = getattr(
+            config, "kv_compression_sink_blocks", 1
+        )
+        self.kv_compression_recent_blocks = getattr(
+            config, "kv_compression_recent_blocks", 8
+        )
+        self.kv_compression_importance_blocks = getattr(
+            config, "kv_compression_importance_blocks", 2
+        )
+        self.kv_compression_query_tokens = getattr(
+            config, "kv_compression_query_tokens", 64
+        )
+        self.kv_compression_trigger_free_ratio = getattr(
+            config, "kv_compression_trigger_free_ratio", 0.15
+        )
+        self.kv_compression_events = 0
+        self.kv_compression_dropped_blocks = 0
+        self.kv_compression_freed_blocks = 0
+        self.kv_compression_dropped_tokens = 0
         self.completed_metrics = []
         self.metrics_by_seq_id = {}
         self.remote_restore_service = remote_restore_service
@@ -89,6 +134,7 @@ class Scheduler:
                 state.transfer.cancel_waiters()
 
         self.block_manager.pending_matches.pop(seq_id, None)
+        self.block_manager.pending_resume_matches.pop(seq_id, None)
         if seq.block_table:
             self.block_manager.deallocate(seq)
         seq.num_scheduled_tokens = 0
@@ -175,6 +221,93 @@ class Scheduler:
     def has_pending_restores(self):
         return bool(self.pending_restores)
 
+    def _apply_kv_reclaim(
+        self, seq: Sequence, decision: KVReclaimDecision
+    ) -> int:
+        freed_blocks = self.block_manager.reclaim_suffix(
+            seq, decision.keep_blocks
+        )
+        seq.record_kv_reclaim(
+            reclaimed_blocks=freed_blocks,
+            retained_blocks=decision.keep_blocks,
+            invalidated_tokens=decision.invalidated_tokens,
+        )
+        self.kv_reclaim_events += 1
+        self.kv_reclaim_requested_blocks += decision.reclaim_blocks
+        self.kv_reclaim_freed_blocks += freed_blocks
+        self.kv_reclaim_retained_blocks += decision.keep_blocks
+        self.kv_reclaim_invalidated_tokens += decision.invalidated_tokens
+        return freed_blocks
+
+    def _maybe_compress(self, seq: Sequence) -> int:
+        if self.kv_compression_policy not in ("sink_recent", "query_aware"):
+            return 0
+        total_blocks = len(self.block_manager.blocks)
+        free_ratio = len(self.block_manager.free_block_ids) / total_blocks
+        if free_ratio > self.kv_compression_trigger_free_ratio:
+            return 0
+        if self.kv_compression_policy == "query_aware":
+            dropped, freed, dropped_tokens = (
+                self.block_manager.compress_query_aware(
+                    seq,
+                    self.kv_compression_sink_blocks,
+                    self.kv_compression_recent_blocks,
+                    self.kv_compression_importance_blocks,
+                    self.kv_compression_query_tokens,
+                )
+            )
+        else:
+            dropped, freed, dropped_tokens = (
+                self.block_manager.compress_sink_recent(
+                    seq,
+                    self.kv_compression_sink_blocks,
+                    self.kv_compression_recent_blocks,
+                )
+            )
+        if dropped == 0:
+            return 0
+        seq.record_kv_compression(dropped, dropped_tokens)
+        self.kv_compression_events += 1
+        self.kv_compression_dropped_blocks += dropped
+        self.kv_compression_freed_blocks += freed
+        self.kv_compression_dropped_tokens += dropped_tokens
+        return freed
+
+    def _ensure_resume_capacity(
+        self,
+        seq: Sequence,
+        now: float,
+    ):
+        """Evict retained waiting prefixes until the selected request can resume."""
+        def reclaim_order(item: Sequence):
+            budget_ms = self.policy.budget_ms(item, self.step_id, now)
+            return (
+                float("inf") if budget_ms is None else budget_ms,
+                item.arrival_step,
+                item.seq_id,
+            )
+
+        while seq.block_table and not self.block_manager.can_resume(seq):
+            candidates = [
+                item for item in self.waiting if item is not seq and item.block_table
+            ]
+            if candidates:
+                victim = max(candidates, key=reclaim_order)
+                budget_ms = self.policy.budget_ms(victim, self.step_id, now)
+                decision = KVReclaimPolicy().plan(victim, budget_ms)
+                self._apply_kv_reclaim(victim, decision)
+                self.kv_reclaim_forced_fallbacks += 1
+                continue
+
+            if self.running:
+                return False
+
+            budget_ms = self.policy.budget_ms(seq, self.step_id, now)
+            decision = KVReclaimPolicy().plan(seq, budget_ms)
+            self._apply_kv_reclaim(seq, decision)
+            self.kv_reclaim_forced_fallbacks += 1
+        return self.block_manager.can_resume(seq)
+
     def schedule(self) -> tuple[list[Sequence], bool]:
         self.step_id += 1
         now = self.clock()
@@ -191,6 +324,8 @@ class Scheduler:
             remaining = self.max_num_batched_tokens - num_batched_tokens
             if remaining == 0:
                 break
+            if seq.block_table and not self._ensure_resume_capacity(seq, now):
+                break
             if not seq.block_table:
                 num_cached_blocks = self.block_manager.can_allocate(seq)
                 if num_cached_blocks == -1:
@@ -199,11 +334,17 @@ class Scheduler:
                     continue
                 num_tokens = seq.num_tokens - num_cached_blocks * self.block_size
             else:
+                reused_tokens = self.block_manager.resume(seq)
+                seq.record_reused_tokens(reused_tokens)
                 num_tokens = seq.num_tokens - seq.num_cached_tokens
             if remaining < num_tokens and scheduled_seqs:  # only allow chunked prefill for the first seq
                 break
             if not seq.block_table:
+                previous_cached_tokens = seq.num_cached_tokens
                 self.block_manager.allocate(seq, num_cached_blocks)
+                seq.record_reused_tokens(
+                    max(0, seq.num_cached_tokens - previous_cached_tokens)
+                )
             seq.mark_scheduled(now)
             seq.num_scheduled_tokens = min(num_tokens, remaining)
             num_batched_tokens += seq.num_scheduled_tokens
@@ -221,6 +362,7 @@ class Scheduler:
             seq = self.policy.select_running(self.running, self.step_id, now)
             seq.last_budget_ms = self.policy.budget_ms(seq, self.step_id, now)
             self.running.remove(seq)
+            self._maybe_compress(seq)
             while not self.block_manager.can_append(seq):
                 if self.running:
                     victim = self.policy.select_preemption_victim(self.running, self.step_id, now)
@@ -242,9 +384,40 @@ class Scheduler:
         return scheduled_seqs, False
 
     def preempt(self, seq: Sequence):
+        if seq.kv_compressed:
+            owned_blocks = len(seq.block_table)
+            invalidated_tokens = seq.num_cached_tokens
+            free_before = len(self.block_manager.free_block_ids)
+            self.block_manager.deallocate(seq)
+            freed_blocks = len(self.block_manager.free_block_ids) - free_before
+            seq.record_kv_reclaim(
+                reclaimed_blocks=freed_blocks,
+                retained_blocks=0,
+                invalidated_tokens=invalidated_tokens,
+            )
+            self.kv_reclaim_events += 1
+            self.kv_reclaim_requested_blocks += owned_blocks
+            self.kv_reclaim_freed_blocks += freed_blocks
+            self.kv_reclaim_invalidated_tokens += invalidated_tokens
+            seq.status = SequenceStatus.WAITING
+            seq.is_prefill = True
+            seq.preemption_count += 1
+            self.waiting.appendleft(seq)
+            return
+        budget_ms = self.policy.budget_ms(seq, self.step_id, self.clock())
+        min_reclaim_blocks = max(
+            1,
+            self.kv_reclaim_target_free_blocks
+            - len(self.block_manager.free_block_ids),
+        )
+        decision = self.kv_reclaim_policy.plan(
+            seq,
+            budget_ms,
+            min_reclaim_blocks=min_reclaim_blocks,
+        )
+        self._apply_kv_reclaim(seq, decision)
         seq.status = SequenceStatus.WAITING
         seq.is_prefill = True
-        self.block_manager.deallocate(seq)
         seq.preemption_count += 1
         self.waiting.appendleft(seq)
 
@@ -252,7 +425,10 @@ class Scheduler:
         now = self.clock()
         for seq, token_id in zip(seqs, token_ids):
             self.block_manager.hash_blocks(seq)
+            if is_prefill:
+                seq.record_recomputed_tokens(seq.num_scheduled_tokens)
             seq.num_cached_tokens += seq.num_scheduled_tokens
+            seq.num_physical_cached_tokens += seq.num_scheduled_tokens
             seq.num_scheduled_tokens = 0
             if is_prefill and seq.num_cached_tokens < seq.num_tokens:
                 continue
@@ -282,11 +458,36 @@ class Scheduler:
             "max_num_batched_tokens": self.max_num_batched_tokens,
             "kvcache_block_size": self.block_size,
             "num_kvcache_blocks": len(self.block_manager.blocks),
+            "num_kvcache_blocks_override": getattr(
+                self, "num_kvcache_blocks_override", None
+            ),
             "kv_cache_capacity_tokens": len(self.block_manager.blocks)
             * self.block_size,
             "prefill_ms_per_token_ewma": self.estimator.prefill_ms_per_token,
             "decode_ms_per_token_ewma": self.estimator.decode_ms_per_token,
             "remote_kv_cost_aware": self.remote_kv_cost_aware,
+            "kv_reclaim_policy": self.kv_reclaim_policy_name,
+            "kv_reclaim_target_free_blocks": self.kv_reclaim_target_free_blocks,
+            "kv_reclaim_events": self.kv_reclaim_events,
+            "kv_reclaim_requested_blocks": self.kv_reclaim_requested_blocks,
+            "kv_reclaim_freed_blocks": self.kv_reclaim_freed_blocks,
+            "kv_reclaim_retained_blocks": self.kv_reclaim_retained_blocks,
+            "kv_reclaim_invalidated_tokens": self.kv_reclaim_invalidated_tokens,
+            "kv_reclaim_forced_fallbacks": self.kv_reclaim_forced_fallbacks,
+            "kv_compression_policy": self.kv_compression_policy,
+            "kv_compression_sink_blocks": self.kv_compression_sink_blocks,
+            "kv_compression_recent_blocks": self.kv_compression_recent_blocks,
+            "kv_compression_importance_blocks": (
+                self.kv_compression_importance_blocks
+            ),
+            "kv_compression_query_tokens": self.kv_compression_query_tokens,
+            "kv_compression_trigger_free_ratio": (
+                self.kv_compression_trigger_free_ratio
+            ),
+            "kv_compression_events": self.kv_compression_events,
+            "kv_compression_dropped_blocks": self.kv_compression_dropped_blocks,
+            "kv_compression_freed_blocks": self.kv_compression_freed_blocks,
+            "kv_compression_dropped_tokens": self.kv_compression_dropped_tokens,
         })
         result.update(self.block_manager.cache_metrics())
         result.update({

@@ -1,8 +1,9 @@
 import pickle
+from multiprocessing.shared_memory import SharedMemory
+from multiprocessing.synchronize import Event
+
 import torch
 import torch.distributed as dist
-from multiprocessing.synchronize import Event
-from multiprocessing.shared_memory import SharedMemory
 
 from nanovllm.config import Config
 from nanovllm.engine.kv_page import (
@@ -11,10 +12,28 @@ from nanovllm.engine.kv_page import (
     TorchKVPageIO,
 )
 from nanovllm.engine.sequence import Sequence
-from nanovllm.models.qwen3 import Qwen3ForCausalLM
 from nanovllm.layers.sampler import Sampler
-from nanovllm.utils.context import set_context, get_context, reset_context
+from nanovllm.models.qwen3 import Qwen3ForCausalLM
+from nanovllm.utils.context import get_context, reset_context, set_context
 from nanovllm.utils.loader import load_model
+
+
+def resolve_kv_cache_blocks(
+    available_blocks: int,
+    requested_blocks: int | None,
+) -> int:
+    if available_blocks <= 0:
+        raise RuntimeError("no GPU memory is available for the KV cache")
+    if requested_blocks is None:
+        return available_blocks
+    if requested_blocks <= 0:
+        raise ValueError("requested KV cache block limit must be positive")
+    if requested_blocks > available_blocks:
+        raise ValueError(
+            "requested KV cache block limit exceeds available capacity: "
+            f"requested={requested_blocks}, available={available_blocks}"
+        )
+    return requested_blocks
 
 
 class ModelRunner:
@@ -115,8 +134,14 @@ class ModelRunner:
         num_kv_heads = hf_config.num_key_value_heads // self.world_size
         head_dim = getattr(hf_config, "head_dim", hf_config.hidden_size // hf_config.num_attention_heads)
         block_bytes = 2 * hf_config.num_hidden_layers * self.block_size * num_kv_heads * head_dim * hf_config.dtype.itemsize
-        config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
-        assert config.num_kvcache_blocks > 0
+        available_blocks = (
+            int(total * config.gpu_memory_utilization - used - peak + current)
+            // block_bytes
+        )
+        config.num_kvcache_blocks = resolve_kv_cache_blocks(
+            available_blocks,
+            config.num_kvcache_blocks_override,
+        )
         self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, config.num_kvcache_blocks, self.block_size, num_kv_heads, head_dim)
         self.kv_page_io = TorchKVPageIO(self.kv_cache)
         layer_id = 0
@@ -215,7 +240,7 @@ class ModelRunner:
         for seq in seqs:
             input_ids.append(seq.last_token)
             positions.append(len(seq) - 1)
-            context_lens.append(len(seq))
+            context_lens.append(seq.attention_context_tokens)
             slot_mapping.append(seq.block_table[-1] * self.block_size + seq.last_block_num_tokens  - 1)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)

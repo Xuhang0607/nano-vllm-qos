@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Nano-vLLM QoS Lab</strong><br>
-  SLO-aware scheduling, page-aligned Radix prefix caching, and hierarchical KV cache research on nano-vLLM
+  SLO-aware scheduling, Query-Aware KV compression, Radix prefix caching, and Mooncake integration on nano-vLLM
 </p>
 
 <p align="center">
@@ -20,18 +20,20 @@ how should an engine coordinate request scheduling, prefix reuse, and KV cache
 placement when interactive and batch requests have different latency budgets?
 
 The current milestone implements a priority-aware latency-budget scheduler
-(PALS), a page-aligned Radix prefix index, a GPU/CPU/Mooncake cache planning
-model, a versioned KV page data plane, and automatic single-rank remote restore.
+(PALS), page-aligned Radix prefix reuse, lossless SLO-aware reclaim, and an
+approximate Query-Aware KV compression path that decouples logical positions
+from physical attention context. It also includes a GPU/CPU/Mooncake cache
+planning model, a versioned KV page data plane, and automatic single-rank remote restore.
 The same single-rank path now writes newly completed KV pages back to remote
 storage without blocking backend I/O on the inference thread. A versioned,
 checksummed catalog snapshot makes those prefixes discoverable after restart.
 FCFS and hash-prefix policies remain available as baselines, so every
 optimization can be compared instead of only demonstrated in isolation.
 
-> The checked-in performance numbers are deterministic control-plane simulator
-> results, not GPU throughput measurements. A real Qwen3-0.6B CUDA + Mooncake
-> TCP write-back/restart/restore path has been validated under WSL2, but it is a
-> correctness result rather than a throughput or latency claim.
+> Claims are split by evidence type. Scheduler, reclaim, compression, and
+> quality results include live Qwen3-0.6B measurements on an RTX 4060 Laptop
+> GPU. Mooncake was validated over single-machine WSL2 TCP; its restore result
+> is a correctness/cost-model result and is not generalized to RDMA or clusters.
 
 ## Motivation
 
@@ -55,6 +57,10 @@ flowchart LR
     C -->|FCFS baseline| D[Scheduler]
     C -->|PALS: priority + SLO slack| D
     D --> E[BlockManager]
+    D --> Q{KV pressure policy}
+    Q -->|lossless| R[SLO-aware suffix reclaim]
+    Q -->|approximate| S[Query-Aware sink + important + recent]
+    S --> I
     E --> F{Prefix backend}
     F -->|Hash baseline| G[Hash prefix cache]
     F -->|Radix| H[Page-aligned Radix index]
@@ -83,6 +89,8 @@ restore remain future work.
 | Area | Implementation | Status |
 | --- | --- | --- |
 | SLO-aware scheduling | Per-request priority, TTFT/TPOT/E2E targets, EWMA service-time estimation, urgency ordering, aging, and preemption-victim selection | Integrated |
+| SLO-aware KV reclaim | Pressure-aware suffix reclaim that preserves an urgency-weighted, complete KV prefix and falls back to full reclaim for forward progress | Experimental, correctness tested |
+| Query-Aware KV compression | Decoupled logical/physical KV lengths, sink + rare query-overlap + recent page selection, periodic compaction, and compressed-decode fallback on preemption | Integrated experimental path, live GPU and quality tested |
 | Request observability | Queue, TTFT, TPOT, E2E, preemption, and SLO-attainment metrics | Integrated |
 | Radix prefix cache | Longest-prefix match, edge splitting, canonical concurrent inserts, reference tracking, page alignment, and LRU leaf eviction | Integrated |
 | Baselines | FCFS vs. PALS and hash prefix cache vs. Radix prefix cache | Integrated |
@@ -137,6 +145,54 @@ score = slack - priority credit - aging credit
 
 The request with the smallest score is most urgent. The same policy also picks
 the least urgent running request as a preemption victim when KV pages are scarce.
+
+### 1.1 SLO-Aware KV Reclaim
+
+The original preemption path released every KV block. The experimental
+`slo_aware` reclaim policy instead preserves a complete contiguous prefix for
+urgent requests and releases the suffix until a configurable free-page target
+is reached. A relaxed request keeps fewer pages; an expired or near-deadline
+request can keep more. If retained waiting prefixes prevent any request from
+resuming, the scheduler falls back to full reclaim to guarantee progress.
+
+This path is lossless: evicted suffix tokens are recomputed before decode, and
+logical token positions are unchanged. Run the deterministic pressure and
+eviction probes with:
+
+```bash
+python -m benchmarks.benchmark_kv_reclaim \
+  --output-json benchmarks/results/kv_reclaim_simulation.json
+```
+
+The checked-in control-plane probe shows that an explicitly retained 4-token
+prefix survives intervening block reuse while the full-recompute baseline
+survives with 0 tokens. Tokens requiring recomputation fall from 12 to 8 in
+that isolated probe. The end-to-end synthetic makespan is unchanged, so this is
+not presented as a GPU performance improvement. See the
+[Chinese design note](docs/slo_kv_reclaim_zh.md) for the algorithm, metrics,
+limitations, and the live pressure experiment.
+
+### 1.2 Query-Aware Approximate KV Compression
+
+Under pressure, `query_aware` keeps three page groups: initial attention sinks,
+recent pages, and historical pages whose rare token IDs overlap the final user
+query. Logical RoPE positions remain unchanged, while FlashAttention receives a
+shorter physical block table and physical `context_lens`. This is an explicit
+approximation: dropped middle pages no longer participate in attention.
+
+```bash
+KV_COMPRESSION_POLICY=query_aware \
+KV_COMPRESSION_SINK_BLOCKS=1 \
+KV_COMPRESSION_RECENT_BLOCKS=2 \
+KV_COMPRESSION_IMPORTANCE_BLOCKS=2 \
+KV_COMPRESSION_QUERY_TOKENS=64 \
+ENABLE_MOONCAKE=0 bash scripts/run_nanovllm_wsl.sh
+```
+
+The implementation periodically compacts physical pages during decode. Prefix
+hashing and remote write-back are disabled after a sequence becomes compressed;
+if that sequence is later preempted, it safely falls back to full recomputation.
+See the [Chinese design and evaluation note](docs/query_aware_kv_compression_zh.md).
 
 ### 2. Page-Aligned Radix Prefix Cache
 
@@ -303,6 +359,24 @@ This result explains why the default cost-aware planner rejects that restore
 on this hardware. See the
 [Chinese live GPU benchmark guide](docs/gpu_serving_benchmark_zh.md).
 
+The same harness also measures the two KV-pressure policies added in this
+milestone. Each row below is the mean of three live runs on the same GPU and
+fixed request trace:
+
+| Experiment | Main benefit | Cost / boundary |
+| --- | --- | --- |
+| Full recompute -> lossless SLO-aware reclaim | Invalidated tokens -35.0%; actually recomputed tokens -14.3% | Request throughput -7.3%; interactive E2E p95 +15.7%. This prototype reduces recomputation but is not a latency win. |
+| No compression -> Query-Aware compression | Request throughput +70.1%; batch E2E p95 -37.4%; interactive E2E p95 -8.8% | Approximate attention; four compactions dropped 1024 physical KV tokens in this workload. |
+
+The compression quality probe repeats a synthetic Needle-in-a-Haystack task at
+early, middle, and late evidence positions. With thinking disabled and a strict
+final-answer matcher, `query_aware` passed 9/9 cases while cumulatively dropping
+KV tokens equivalent to 40.5% of prompt tokens; `sink_recent` passed 0/9 at a
+67.6% drop ratio. This
+small targeted test demonstrates why query relevance matters, but it is not a
+claim of unchanged quality on general benchmarks. The raw and generated reports
+are checked in under [`benchmarks/results`](benchmarks/results).
+
 ### Multi-Arrival-Rate PALS Pressure Test
 
 FCFS and PALS were each repeated three times at interactive arrival rates of
@@ -467,6 +541,9 @@ design.
 - [x] Three-run Hash/Radix and local/Mooncake GPU ablations with mean, standard deviation, and 95% CI
 - [x] Mutable Mooncake catalog upsert fix validated by cross-worker restore
 - [x] 2/5/20 req/s PALS pressure curves with GPU utilization, power, and peak-memory sampling
+- [x] Lossless SLO-aware partial KV reclaim, Radix suffix reattachment, recompute counters, and three-run pressure ablation
+- [x] Query-Aware approximate KV compression with decoupled logical/physical context lengths and safe recompute fallback
+- [x] Three-run RTX 4060 compression ablation plus 9-case live Needle-in-a-Haystack quality comparison
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
@@ -489,6 +566,8 @@ TCP, rather than generalizing these results to RDMA or multi-node deployments.
 - [Run the real Qwen3 model on Windows (Chinese)](docs/windows_qwen3_zh.md)
 - [Run the CUDA + Mooncake full stack on WSL2 (Chinese)](docs/wsl_mooncake_full_stack_zh.md)
 - [Live GPU serving benchmark and ablation (Chinese)](docs/gpu_serving_benchmark_zh.md)
+- [SLO-aware lossless KV reclaim (Chinese)](docs/slo_kv_reclaim_zh.md)
+- [Query-Aware approximate KV compression (Chinese)](docs/query_aware_kv_compression_zh.md)
 - [Resume wording and interview guide (Chinese)](docs/resume_and_interview_zh.md)
 - [Related papers](docs/papers.md)
 

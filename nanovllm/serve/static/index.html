@@ -126,10 +126,25 @@
         <div class="detail-row"><span>恢复 token</span><strong id="restoreTokensValue">0</strong></div>
         <div class="detail-row"><span>已取消</span><strong id="cancelledValue">0</strong></div>
       </div>
+        <div class="metric-section">
+          <div class="section-label">KV 回收</div>
+        <div class="detail-row"><span>策略</span><strong id="reclaimPolicyValue">--</strong></div>
+        <div class="detail-row"><span>释放页</span><strong id="reclaimFreedValue">0</strong></div>
+        <div class="detail-row"><span>保留页</span><strong id="reclaimRetainedValue">0</strong></div>
+        <div class="detail-row"><span>重算 token</span><strong id="recomputedTokensValue">0</strong></div>
+          <div class="detail-row"><span>降级次数</span><strong id="reclaimFallbackValue">0</strong></div>
+        </div>
+        <div class="metric-section">
+          <div class="section-label">KV 压缩</div>
+          <div class="detail-row"><span>策略</span><strong id="compressionPolicyValue">--</strong></div>
+          <div class="detail-row"><span>压缩次数</span><strong id="compressionEventsValue">0</strong></div>
+          <div class="detail-row"><span>释放页</span><strong id="compressionFreedValue">0</strong></div>
+          <div class="detail-row"><span>丢弃 token</span><strong id="compressionTokensValue">0</strong></div>
+        </div>
       <div id="requestState" class="request-state">IDLE</div>
     </aside>
   </div>
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="/static/app.js?v=7"></script>
+    <script src="/static/app.js?v=9"></script>
 </body>
 </html>

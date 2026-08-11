@@ -43,6 +43,15 @@ function updateSchedulerMetrics(metrics = {}) {
   setText("restoreCountValue", metrics.remote_restore_completed ?? 0);
   setText("restoreTokensValue", metrics.kv_restored_tokens ?? 0);
   setText("cancelledValue", metrics.cancelled_requests ?? 0);
+  setText("reclaimPolicyValue", metrics.kv_reclaim_policy ?? "--");
+  setText("reclaimFreedValue", metrics.kv_reclaim_freed_blocks ?? 0);
+  setText("reclaimRetainedValue", metrics.kv_reclaim_retained_blocks ?? 0);
+  setText("recomputedTokensValue", metrics.kv_recomputed_tokens ?? 0);
+  setText("reclaimFallbackValue", metrics.kv_reclaim_forced_fallbacks ?? 0);
+  setText("compressionPolicyValue", metrics.kv_compression_policy ?? "--");
+  setText("compressionEventsValue", metrics.kv_compression_events ?? 0);
+  setText("compressionFreedValue", metrics.kv_compression_freed_blocks ?? 0);
+  setText("compressionTokensValue", metrics.kv_compression_dropped_tokens ?? 0);
   const rate = Math.max(0, Math.min(1, Number(metrics.prefix_cache_block_hit_rate || 0)));
   setText("cacheRateValue", `${Math.round(rate * 100)}%`);
   $("cacheRateBar").style.width = `${rate * 100}%`;

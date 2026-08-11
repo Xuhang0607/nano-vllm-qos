@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Nano-vLLM QoS Lab</strong><br>
-  基于 nano-vLLM 的 SLO 感知调度、页对齐 Radix 前缀缓存与分层 KV Cache 研究
+  基于 nano-vLLM 的 SLO 感知调度、Query-Aware KV 压缩、Radix 前缀缓存与分层 KV 研究
 </p>
 
 <p align="center">
@@ -20,12 +20,13 @@ LLM Serving 问题：当在线请求和批处理请求具有不同的优先级�
 
 当前里程碑已经实现优先级与延迟预算感知调度器 PALS、页对齐 Radix 前缀索引、
 GPU/CPU/Mooncake 分层缓存决策模型、版本化 KV Page 数据面，以及 TP=1 下的自动远端
-恢复、自动远端写回和可重启恢复的持久化 Catalog。原有 FCFS 与 Hash Prefix Cache
-作为基线保留，便于对每项优化进行可复现的对比。
+恢复、自动远端写回和可重启恢复的持久化 Catalog。在此基础上，本仓库新增了无损的
+SLO-Aware 部分 KV 回收，以及按 Query 相关性保留历史页的近似 KV 压缩。原有 FCFS、
+Hash Prefix Cache、全量重计算和不压缩策略均作为基线保留。
 
-> 仓库中的性能数字来自确定性的控制面模拟器，不是 GPU 实机吞吐数据。当前已经在
-> WSL2 下验证 Qwen3-0.6B CUDA + Mooncake TCP 的写回、重启和恢复闭环，但该结果
-> 证明的是正确性，不代表吞吐或延迟提升。
+> 调度、回收、压缩和质量结论均包含 RTX 4060 Laptop GPU + Qwen3-0.6B 实机数据；
+> Mooncake 使用 WSL2 单机 TCP。每项结论会区分确定性模拟、实机性能和小规模质量探针，
+> 不把单机结果外推为 RDMA、多机或通用模型质量结论。
 
 ## 项目背景
 
@@ -48,6 +49,11 @@ flowchart LR
     C -->|FCFS 基线| D[Scheduler]
     C -->|PALS: 优先级 + SLO Slack| D
     D --> E[BlockManager]
+    D --> Q{KV 压力策略}
+    Q -->|无损| R[SLO-Aware 部分回收]
+    Q -->|近似| S[Query-Aware 物理页压缩]
+    R --> E
+    S --> E
     E --> F{前缀缓存后端}
     F -->|Hash 基线| G[Hash Prefix Cache]
     F -->|Radix| H[页对齐 Radix 索引]
@@ -75,6 +81,8 @@ TP=1 的远端恢复路径已经从 Prefix Lookup 接到 GPU Page Import 与 Sch
 | --- | --- | --- |
 | SLO 感知调度 | 请求优先级、TTFT/TPOT/E2E 目标、EWMA 执行时间估计、紧迫度排序、老化与抢占对象选择 | 已接入推理调度器 |
 | 请求可观测性 | Queue、TTFT、TPOT、E2E、抢占次数与 SLO 达成率 | 已接入 |
+| SLO-Aware KV 回收 | 按请求紧迫度保留连续前缀、释放后缀、Radix 后缀重挂接与无进展全量回收兜底 | 无损路径，已完成实机对照 |
+| Query-Aware KV 压缩 | 保留 Attention Sink、与尾部 Query 稀有 Token 重合的历史页和 Recent Window；逻辑/物理长度解耦 | 近似路径，已完成实机性能与质量探针 |
 | Radix 前缀缓存 | Longest Prefix Match、边分裂、并发插入规范化、引用管理、Page 对齐与 LRU 叶节点驱逐 | 已接入 BlockManager |
 | 对比基线 | FCFS vs. PALS，Hash Prefix Cache vs. Radix Prefix Cache | 已实现 |
 | 分层缓存索引 | GPU/CPU/Mooncake 独立 Radix 索引与驻留位置查询 | 控制面原型 |
@@ -127,6 +135,38 @@ score = slack - 优先级补偿 - 等待老化补偿
 
 `score` 越小，请求越紧迫。当 KV Page 不足时，同一策略会选择最不紧迫的 Running
 请求作为抢占对象。
+
+### 1.1 SLO-Aware 无损 KV 回收
+
+原始抢占会释放请求持有的全部 KV Block。`slo_aware` 策略根据请求紧迫度保留一段完整、
+连续的前缀，只释放后缀直到空闲页达到目标。被释放的 Token 会在恢复执行时重新 Prefill，
+因此逻辑位置和最终计算语义不变。恢复时会重新查询 Radix Cache，把其他请求在此期间产生的
+可复用后缀接回来；若保留页导致所有请求都无法继续，则退化为全量回收以保证系统前进。
+
+确定性探针中，需要重计算的 Token 从 12 降至 8。RTX 4060 三轮压力实验中，逻辑失效
+Token 降低 35.0%，实际重计算 Token 降低 14.3%；但请求吞吐降低 7.3%，Interactive E2E
+p95 增加 15.7%。因此这项工作证明了“减少重计算”的机制正确性，也暴露了当前恢复调度
+开销，不能包装成端到端性能提升。详见 [SLO-Aware KV 回收设计](docs/slo_kv_reclaim_zh.md)。
+
+### 1.2 Query-Aware 近似 KV 压缩
+
+当空闲页比例低于阈值时，`query_aware` 从长序列中保留三类物理页：开头的 Attention
+Sink、与最后一段用户 Query 的稀有 Token ID 重合的历史页，以及最近窗口。RoPE 仍使用
+原始逻辑位置，FlashAttention 则接收压缩后的物理 Block Table 与 `context_lens`。因此它
+减少的是参与注意力的物理 KV，而不是修改 Token 的原始位置。
+
+```bash
+KV_COMPRESSION_POLICY=query_aware \
+KV_COMPRESSION_SINK_BLOCKS=1 \
+KV_COMPRESSION_RECENT_BLOCKS=2 \
+KV_COMPRESSION_IMPORTANCE_BLOCKS=2 \
+KV_COMPRESSION_QUERY_TOKENS=64 \
+ENABLE_MOONCAKE=0 bash scripts/run_nanovllm_wsl.sh
+```
+
+这是明确的近似算法：被丢弃的中间页不再参与后续 Attention。序列被压缩后会停止 Prefix
+Hash 与 Remote Write-Back；若之后发生抢占，则安全回退到全量重计算，避免从不完整 KV
+恢复。设计、消融和质量边界见 [Query-Aware KV 压缩](docs/query_aware_kv_compression_zh.md)。
 
 ### 2. Page-Aligned Radix Prefix Cache
 
@@ -270,6 +310,18 @@ Interactive 的首 Token 延迟上升。原始 JSON、CSV 和自动生成的对�
 完整方法、原始结果和适用边界见
 [真实 GPU Serving Benchmark](docs/gpu_serving_benchmark_zh.md)。
 
+同一套框架还完成了 KV 压力策略对照。下表均为固定请求轨迹下 3 轮 RTX 4060 实机均值：
+
+| 实验 | 主要收益 | 代价与边界 |
+| --- | --- | --- |
+| 全量重计算 -> SLO-Aware 无损回收 | 失效 Token -35.0%，实际重计算 Token -14.3% | 请求吞吐 -7.3%，Interactive E2E p95 +15.7%；当前实现不是端到端性能收益 |
+| 不压缩 -> Query-Aware 压缩 | 请求吞吐 +70.1%，Batch E2E p95 -37.4%，Interactive E2E p95 -8.8% | 近似 Attention；本负载 4 次压缩共丢弃 1024 个物理 KV Token |
+
+质量实验在 Needle-in-a-Haystack 任务的前、中、后三种证据位置上各重复 3 次。关闭思考并
+只校验 `</think>` 后的最终答案，`query_aware` 在累计 KV Token 丢弃比例 40.5% 时通过
+9/9；仅保留开头和最近窗口的 `sink_recent` 在 67.6% 丢弃比例下通过 0/9。这个小规模定向测试证明 Query 相关性
+筛选优于固定窗口，但不代表 LongBench 或真实业务质量完全无损。
+
 ### 多到达率 PALS 压力曲线
 
 在 `2/5/20 req/s` 三档交互请求到达率下，FCFS/PALS 各重复 3 轮。PALS 将 Interactive
@@ -383,8 +435,9 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 | --- | --- |
 | `nanovllm/engine/qos.py` | 请求 QoS、指标、服务时间估计与 FCFS/PALS 策略 |
 | `nanovllm/engine/scheduler.py` | 调度策略与 Waiting/Running 队列、抢占逻辑的集成 |
+| `nanovllm/engine/kv_reclaim.py` | SLO-Aware 保留页计算与压力回收计划 |
 | `nanovllm/engine/radix_cache.py` | Page-Aligned Radix 前缀元数据 |
-| `nanovllm/engine/block_manager.py` | Hash/Radix 后端接入与物理 Block 所有权 |
+| `nanovllm/engine/block_manager.py` | Hash/Radix 接入、物理 Block 所有权、部分回收与 Query-Aware 压缩 |
 | `nanovllm/engine/hierarchical_cache.py` | 分层索引与 Transfer-vs-Recompute 决策器 |
 | `nanovllm/engine/storage_backend.py` | In-Memory 与 Mooncake KV 对象适配器 |
 | `nanovllm/engine/transfer_coordinator.py` | 异步 KV 状态机、并发请求合并与 Key 级 I/O 排序 |
@@ -421,6 +474,9 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 - [x] 完成 Hash/Radix 与 Local/Mooncake 三轮 GPU Ablation，并报告均值、标准差和 95% CI
 - [x] 修复 Mooncake 固定 Catalog Key 使用 Insert 导致跨 Worker 读取旧快照的问题，改为显式 Upsert
 - [x] 完成 2/5/20 req/s 多到达率 PALS 压力曲线，并采集 GPU 利用率、功耗与峰值显存
+- [x] SLO-Aware 无损部分 KV 回收、Radix 后缀重挂接、重计算计数与三轮压力对照
+- [x] Query-Aware 近似 KV 压缩、逻辑/物理上下文解耦与抢占后的安全重计算回退
+- [x] 三轮 RTX 4060 压缩消融与 9 样本 Needle-in-a-Haystack 质量对照
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
@@ -438,6 +494,8 @@ Hash Prefix      -> Page-Aligned Radix Prefix
 GPU-only pressure -> GPU/CPU/Mooncake 分层规划
 Remote hit       -> Transfer-vs-Recompute 动态决策
 FCFS             -> Priority + SLO Slack 调度
+Full reclaim     -> SLO-Aware 连续前缀保留
+Full KV context  -> Query-Aware 物理页压缩
 ```
 
 这条主线对应了可以定位到源码、单测和 Benchmark 的实际改动，也保留了基线用于回答
@@ -456,6 +514,8 @@ FCFS             -> Priority + SLO Slack 调度
 - [Windows 本地运行真实 Qwen3 模型](docs/windows_qwen3_zh.md)
 - [WSL2 运行 CUDA + Mooncake 完整链路](docs/wsl_mooncake_full_stack_zh.md)
 - [真实 GPU Serving Benchmark 与 Ablation](docs/gpu_serving_benchmark_zh.md)
+- [SLO-Aware 无损 KV 回收](docs/slo_kv_reclaim_zh.md)
+- [Query-Aware 近似 KV 压缩](docs/query_aware_kv_compression_zh.md)
 - [简历描述与面试讲解](docs/resume_and_interview_zh.md)
 - [相关论文](docs/papers.md)
 

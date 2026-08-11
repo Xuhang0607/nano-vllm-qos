@@ -20,6 +20,9 @@ def make_run(policy="pals", throughput=2.0, fingerprint="same"):
             "hardware": "test-gpu",
             "policy": policy,
             "prefix_cache_backend": "radix",
+            "kv_reclaim_policy": "slo_aware",
+            "num_kvcache_blocks": 16,
+            "num_kvcache_blocks_override": 16,
             "max_num_seqs": 1,
             "max_model_len": 40960,
             "remote_kv_cost_aware": True,
@@ -30,6 +33,7 @@ def make_run(policy="pals", throughput=2.0, fingerprint="same"):
             "warmup_enabled": True,
             "gpu_sampling_interval_ms": 200,
             "requests": 2,
+            "workload_parameters": {"batch_requests": 1},
         },
         "overall": {
             "request_throughput_rps": throughput,
@@ -50,7 +54,20 @@ def make_run(policy="pals", throughput=2.0, fingerprint="same"):
             "remote_restore_completed": 0,
             "remote_io_backend_get_bytes": 0,
             "remote_io_backend_put_bytes": 0,
+            "kv_reclaim_forced_fallbacks": 0,
         },
+        "requests": [
+            {
+                "metrics": {
+                    "preemptions": 1,
+                    "kv_reclaim_events": 1,
+                    "kv_reclaimed_blocks": 2,
+                    "kv_retained_blocks": 1,
+                    "kv_invalidated_tokens": 512,
+                    "kv_recomputed_tokens": 256,
+                }
+            }
+        ],
         "gpu": {
             "available": True,
             "utilization_gpu_percent": {
@@ -86,6 +103,7 @@ def test_aggregate_runs_validates_configuration_and_aggregates_metrics():
     assert group["metrics"]["overall.request_throughput_rps"]["mean"] == 3
     assert group["metrics"]["interactive.e2e_ms_p95"]["mean"] == 6
     assert group["metrics"]["gpu.utilization_gpu_percent.mean"]["mean"] == 30
+    assert group["metrics"]["kv.recomputed_tokens"]["mean"] == 256
 
     with pytest.raises(ValueError, match="workload_fingerprint"):
         aggregate_runs([make_run(), make_run(fingerprint="other")], "invalid")

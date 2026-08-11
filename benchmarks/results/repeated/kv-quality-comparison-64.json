@@ -1,0 +1,43 @@
+{
+  "benchmark": "KV compression quality comparison",
+  "case_ids": [
+    "early-0",
+    "early-1",
+    "early-2",
+    "middle-0",
+    "middle-1",
+    "middle-2",
+    "late-0",
+    "late-1",
+    "late-2"
+  ],
+  "policies": [
+    {
+      "policy": "none",
+      "accuracy": 1.0,
+      "correct": 9,
+      "cases": 9,
+      "compression_drop_ratio": 0.0,
+      "ttft_ms_mean": 202.40680721892406,
+      "e2e_ms_mean": 776.1677645564001
+    },
+    {
+      "policy": "sink_recent",
+      "accuracy": 0.0,
+      "correct": 0,
+      "cases": 9,
+      "compression_drop_ratio": 0.6756994545134613,
+      "ttft_ms_mean": 205.37253455323582,
+      "e2e_ms_mean": 630.2145977776187
+    },
+    {
+      "policy": "query_aware",
+      "accuracy": 1.0,
+      "correct": 9,
+      "cases": 9,
+      "compression_drop_ratio": 0.4054196727080767,
+      "ttft_ms_mean": 201.32679999935337,
+      "e2e_ms_mean": 801.4545210009803
+    }
+  ]
+}

@@ -34,6 +34,28 @@ COUNTER_FIELDS = (
     "remote_io_backend_puts",
     "remote_io_backend_put_bytes",
     "remote_io_failures",
+    "kv_reclaim_events",
+    "kv_reclaim_requested_blocks",
+    "kv_reclaim_freed_blocks",
+    "kv_reclaim_retained_blocks",
+    "kv_reclaim_invalidated_tokens",
+    "kv_reclaim_forced_fallbacks",
+    "kv_compression_events",
+    "kv_compression_dropped_blocks",
+    "kv_compression_freed_blocks",
+    "kv_compression_dropped_tokens",
+)
+REQUEST_KV_FIELDS = (
+    "preemptions",
+    "kv_reclaim_events",
+    "kv_reclaimed_blocks",
+    "kv_retained_blocks",
+    "kv_invalidated_tokens",
+    "kv_recomputed_tokens",
+    "kv_compression_events",
+    "kv_compression_dropped_blocks",
+    "kv_compression_dropped_tokens",
+    "kv_restored_tokens",
 )
 GPU_QUERY_FIELDS = (
     "index",
@@ -298,10 +320,19 @@ def build_workload(
     interactive_delay_ms: float = 100.0,
     batch_output_tokens: int = 16,
     interactive_output_tokens: int = 8,
+    batch_unique_repeats: int = 0,
+    interactive_unique_repeats: int = 0,
 ):
     shared_prefix = build_shared_prefix(workload_id, shared_prefix_repeats)
     workload = []
     for index in range(batch_requests):
+        unique_context = "\n".join(
+            f"private-{index}-{repeat:04d}: preserve this request-specific fact."
+            for repeat in range(batch_unique_repeats)
+        )
+        batch_question = f"离线任务 {index}：用一句话概括以上上下文。"
+        if unique_context:
+            batch_question = f"{unique_context}\n\n{batch_question}"
         workload.append(
             RequestSpec(
                 request_id=f"batch-{index}",
@@ -310,7 +341,7 @@ def build_workload(
                 arrival_ms=0.0,
                 messages=(
                     ("system", shared_prefix),
-                    ("user", f"离线任务 {index}：用一句话概括以上上下文。"),
+                    ("user", batch_question),
                 ),
                 max_tokens=batch_output_tokens,
                 ttft_slo_ms=10000.0,
@@ -319,13 +350,22 @@ def build_workload(
             )
         )
     for index in range(interactive_requests):
+        interactive_context = "\n".join(
+            f"interactive-{index}-{repeat:04d}: latency-sensitive private context."
+            for repeat in range(interactive_unique_repeats)
+        )
+        interactive_question = f"交互请求 {index}：只回答数字 {index}。"
+        if interactive_context:
+            interactive_question = (
+                f"{interactive_context}\n\n{interactive_question}"
+            )
         workload.append(
             RequestSpec(
                 request_id=f"interactive-{index}",
                 request_class="interactive",
                 priority=10,
                 arrival_ms=interactive_delay_ms * (index + 1),
-                messages=(("user", f"交互请求 {index}：只回答数字 {index}。"),),
+                messages=(("user", interactive_question),),
                 max_tokens=interactive_output_tokens,
                 ttft_slo_ms=2000.0,
                 tpot_slo_ms=300.0,
@@ -472,6 +512,7 @@ def run_live_benchmark(
     workload_label: str | None = None,
     gpu_sampling_interval_ms: int | None = None,
     gpu_index: int = 0,
+    workload_parameters: dict | None = None,
 ):
     base_url = base_url.rstrip("/")
     health = request_json(f"{base_url}/health", api_key=api_key, timeout_s=timeout_s)
@@ -543,7 +584,27 @@ def run_live_benchmark(
             "max_num_batched_tokens": metrics_before.get("max_num_batched_tokens"),
             "kvcache_block_size": metrics_before.get("kvcache_block_size"),
             "num_kvcache_blocks": metrics_before.get("num_kvcache_blocks"),
+            "num_kvcache_blocks_override": metrics_before.get(
+                "num_kvcache_blocks_override"
+            ),
             "kv_cache_capacity_tokens": metrics_before.get("kv_cache_capacity_tokens"),
+            "kv_reclaim_policy": metrics_before.get("kv_reclaim_policy"),
+            "kv_compression_policy": metrics_before.get("kv_compression_policy"),
+            "kv_compression_sink_blocks": metrics_before.get(
+                "kv_compression_sink_blocks"
+            ),
+            "kv_compression_recent_blocks": metrics_before.get(
+                "kv_compression_recent_blocks"
+            ),
+            "kv_compression_importance_blocks": metrics_before.get(
+                "kv_compression_importance_blocks"
+            ),
+            "kv_compression_query_tokens": metrics_before.get(
+                "kv_compression_query_tokens"
+            ),
+            "kv_compression_trigger_free_ratio": metrics_before.get(
+                "kv_compression_trigger_free_ratio"
+            ),
             "remote_kv_cost_aware": metrics_before.get("remote_kv_cost_aware"),
             "workload_fingerprint": workload_fingerprint(workload),
             "workload_label": workload_metadata["label"],
@@ -554,6 +615,7 @@ def run_live_benchmark(
             "warmup_enabled": warmup_prefix is not None,
             "gpu_sampling_interval_ms": gpu_sampling_interval_ms,
             "requests": len(workload),
+            "workload_parameters": workload_parameters or {},
         },
         "overall": summarize_records(records, duration_s),
         "gpu": gpu_metrics,
@@ -589,8 +651,7 @@ def write_results(results, output_json: Path, output_csv: Path | None = None):
         "completion_tokens",
         *LATENCY_FIELDS,
         *SLO_FIELDS,
-        "preemptions",
-        "kv_restored_tokens",
+        *REQUEST_KV_FIELDS,
         "error",
     ]
     with output_csv.open("w", newline="", encoding="utf-8-sig") as handle:
@@ -606,8 +667,7 @@ def write_results(results, output_json: Path, output_csv: Path | None = None):
                     "completion_tokens": usage.get("completion_tokens"),
                     **{field: metrics.get(field) for field in LATENCY_FIELDS},
                     **{field: metrics.get(field) for field in SLO_FIELDS},
-                    "preemptions": metrics.get("preemptions"),
-                    "kv_restored_tokens": metrics.get("kv_restored_tokens"),
+                    **{field: metrics.get(field) for field in REQUEST_KV_FIELDS},
                 }
             )
     return output_csv
@@ -648,6 +708,21 @@ def print_report(results):
         f"{cache['remote_io_transfer_bytes'] / 1024**2:.2f} MiB, "
         f"failures={cache['remote_io_failures']}"
     )
+    print(
+        "KV reclaim: "
+        f"policy={metadata.get('kv_reclaim_policy')}, "
+        f"events={cache['kv_reclaim_events']}, "
+        f"freed={cache['kv_reclaim_freed_blocks']} blocks, "
+        f"invalidated={cache['kv_reclaim_invalidated_tokens']} tokens, "
+        f"fallbacks={cache['kv_reclaim_forced_fallbacks']}"
+    )
+    print(
+        "KV compression: "
+        f"policy={metadata.get('kv_compression_policy')}, "
+        f"events={cache['kv_compression_events']}, "
+        f"freed={cache['kv_compression_freed_blocks']} blocks, "
+        f"dropped={cache['kv_compression_dropped_tokens']} tokens"
+    )
     gpu = results["gpu"]
     if gpu["available"]:
         utilization = gpu["utilization_gpu_percent"]
@@ -675,6 +750,18 @@ def main():
     parser.add_argument("--interactive-delay-ms", type=float, default=100.0)
     parser.add_argument("--batch-output-tokens", type=int, default=16)
     parser.add_argument("--interactive-output-tokens", type=int, default=8)
+    parser.add_argument(
+        "--batch-unique-repeats",
+        type=int,
+        default=0,
+        help="Append deterministic request-private text to create KV pressure",
+    )
+    parser.add_argument(
+        "--interactive-unique-repeats",
+        type=int,
+        default=0,
+        help="Append private context to each latency-sensitive request",
+    )
     parser.add_argument("--timeout-s", type=float, default=120.0)
     parser.add_argument("--gpu-sampling-interval-ms", type=int, default=200)
     parser.add_argument("--gpu-index", type=int, default=0)
@@ -689,6 +776,10 @@ def main():
         parser.error("at least one request is required")
     if args.shared_prefix_repeats <= 0:
         parser.error("shared-prefix-repeats must be positive")
+    if args.batch_unique_repeats < 0:
+        parser.error("batch-unique-repeats must not be negative")
+    if args.interactive_unique_repeats < 0:
+        parser.error("interactive-unique-repeats must not be negative")
     if args.gpu_sampling_interval_ms <= 0 or args.gpu_index < 0:
         parser.error("GPU sampling interval must be positive and index non-negative")
 
@@ -700,6 +791,8 @@ def main():
         args.interactive_delay_ms,
         args.batch_output_tokens,
         args.interactive_output_tokens,
+        args.batch_unique_repeats,
+        args.interactive_unique_repeats,
     )
     shared_prefix = build_shared_prefix(args.workload_id, args.shared_prefix_repeats)
     results = run_live_benchmark(
@@ -713,6 +806,16 @@ def main():
         args.workload_label,
         None if args.no_gpu_sampling else args.gpu_sampling_interval_ms,
         args.gpu_index,
+        {
+            "batch_requests": args.batch_requests,
+            "interactive_requests": args.interactive_requests,
+            "shared_prefix_repeats": args.shared_prefix_repeats,
+            "batch_unique_repeats": args.batch_unique_repeats,
+            "interactive_unique_repeats": args.interactive_unique_repeats,
+            "interactive_delay_ms": args.interactive_delay_ms,
+            "batch_output_tokens": args.batch_output_tokens,
+            "interactive_output_tokens": args.interactive_output_tokens,
+        },
     )
     print_report(results)
     output_csv = write_results(results, args.output_json, args.output_csv)

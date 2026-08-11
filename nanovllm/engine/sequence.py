@@ -35,9 +35,11 @@ class Sequence:
         self.num_tokens = len(self.token_ids)
         self.num_prompt_tokens = len(token_ids)
         self.num_cached_tokens = 0
+        self.num_physical_cached_tokens = 0
         self.num_scheduled_tokens = 0
         self.is_prefill = True
         self.block_table = []
+        self.kv_block_logical_indices = []
         self.temperature = sampling_params.temperature
         self.max_tokens = sampling_params.max_tokens
         self.ignore_eos = sampling_params.ignore_eos
@@ -48,6 +50,16 @@ class Sequence:
         self.first_token_time = None
         self.finished_time = None
         self.preemption_count = 0
+        self.kv_reclaim_events = 0
+        self.kv_reclaimed_blocks = 0
+        self.kv_retained_blocks = 0
+        self.kv_invalidated_tokens = 0
+        self.kv_recomputed_tokens = 0
+        self.pending_preemption_recompute_tokens = 0
+        self.kv_compressed = False
+        self.kv_compression_events = 0
+        self.kv_compression_dropped_blocks = 0
+        self.kv_compression_dropped_tokens = 0
         self.last_budget_ms = None
         self.remote_restore_attempted = False
         self.remote_restore_started_time = None
@@ -91,6 +103,10 @@ class Sequence:
     def last_block_num_tokens(self):
         return self.num_tokens - (self.num_blocks - 1) * self.block_size
 
+    @property
+    def attention_context_tokens(self):
+        return self.num_physical_cached_tokens + 1
+
     def block(self, i):
         assert 0 <= i < self.num_blocks
         return self.token_ids[i*self.block_size: (i+1)*self.block_size]
@@ -113,6 +129,35 @@ class Sequence:
 
     def mark_finished(self, now: float):
         self.finished_time = now
+
+    def record_kv_reclaim(
+        self,
+        reclaimed_blocks: int,
+        retained_blocks: int,
+        invalidated_tokens: int,
+    ):
+        self.kv_reclaim_events += 1
+        self.kv_reclaimed_blocks += reclaimed_blocks
+        self.kv_retained_blocks += retained_blocks
+        self.kv_invalidated_tokens += invalidated_tokens
+        self.pending_preemption_recompute_tokens += invalidated_tokens
+
+    def record_recomputed_tokens(self, scheduled_tokens: int):
+        recomputed = min(scheduled_tokens, self.pending_preemption_recompute_tokens)
+        self.kv_recomputed_tokens += recomputed
+        self.pending_preemption_recompute_tokens -= recomputed
+
+    def record_reused_tokens(self, reused_tokens: int):
+        self.pending_preemption_recompute_tokens = max(
+            0,
+            self.pending_preemption_recompute_tokens - reused_tokens,
+        )
+
+    def record_kv_compression(self, dropped_blocks: int, dropped_tokens: int):
+        self.kv_compressed = True
+        self.kv_compression_events += 1
+        self.kv_compression_dropped_blocks += dropped_blocks
+        self.kv_compression_dropped_tokens += dropped_tokens
 
     def cancel(self, now: float):
         if self.is_terminal:
@@ -173,6 +218,14 @@ class Sequence:
             tpot_ms=tpot_ms,
             e2e_ms=e2e_ms,
             preemptions=self.preemption_count,
+            kv_reclaim_events=self.kv_reclaim_events,
+            kv_reclaimed_blocks=self.kv_reclaimed_blocks,
+            kv_retained_blocks=self.kv_retained_blocks,
+            kv_invalidated_tokens=self.kv_invalidated_tokens,
+            kv_recomputed_tokens=self.kv_recomputed_tokens,
+            kv_compression_events=self.kv_compression_events,
+            kv_compression_dropped_blocks=self.kv_compression_dropped_blocks,
+            kv_compression_dropped_tokens=self.kv_compression_dropped_tokens,
             kv_restore_wait_ms=self.remote_restore_wait_ms,
             kv_restored_tokens=self.remote_restored_tokens,
             kv_restore_failures=self.remote_restore_failures,
@@ -188,10 +241,30 @@ class Sequence:
 
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
-        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)
+        return (
+            self.num_tokens,
+            self.num_prompt_tokens,
+            self.num_cached_tokens,
+            self.num_physical_cached_tokens,
+            self.num_scheduled_tokens,
+            self.block_table,
+            self.kv_block_logical_indices,
+            self.kv_compressed,
+            last_state,
+        )
 
     def __setstate__(self, state):
-        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state
+        (
+            self.num_tokens,
+            self.num_prompt_tokens,
+            self.num_cached_tokens,
+            self.num_physical_cached_tokens,
+            self.num_scheduled_tokens,
+            self.block_table,
+            self.kv_block_logical_indices,
+            self.kv_compressed,
+            last_state,
+        ) = state
         if isinstance(last_state, list):
             self.token_ids = last_state
             self.last_token = self.token_ids[-1]

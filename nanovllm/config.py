@@ -28,6 +28,7 @@ class Config:
     eos: int = -1
     kvcache_block_size: int = 256
     num_kvcache_blocks: int = -1
+    num_kvcache_blocks_override: int | None = None
     prefix_cache_backend: str = "hash"
     scheduling_policy: str = "fcfs"
     qos_best_effort_slo_ms: float = 60000.0
@@ -36,6 +37,17 @@ class Config:
     qos_prefill_ms_per_token: float = 0.05
     qos_decode_ms_per_token: float = 5.0
     qos_ewma_alpha: float = 0.2
+    kv_reclaim_policy: str = "slo_aware"
+    kv_reclaim_min_keep_ratio: float = 0.0
+    kv_reclaim_max_keep_ratio: float = 0.75
+    kv_reclaim_budget_scale_ms: float = 1000.0
+    kv_reclaim_target_free_blocks: int = 2
+    kv_compression_policy: str = "none"
+    kv_compression_sink_blocks: int = 1
+    kv_compression_recent_blocks: int = 8
+    kv_compression_importance_blocks: int = 2
+    kv_compression_query_tokens: int = 64
+    kv_compression_trigger_free_ratio: float = 0.15
     kv_cache_model_id: str | None = None
     kv_cache_model_revision: str = "local"
     remote_kv_cost_aware: bool = True
@@ -52,6 +64,10 @@ class Config:
 
         assert os.path.isdir(self.model)
         assert self.kvcache_block_size % 256 == 0
+        assert (
+            self.num_kvcache_blocks_override is None
+            or self.num_kvcache_blocks_override > 0
+        )
         assert self.prefix_cache_backend in ("hash", "radix")
         assert 1 <= self.tensor_parallel_size <= 8
         assert self.scheduling_policy in ("fcfs", "pals")
@@ -61,6 +77,21 @@ class Config:
         assert self.qos_prefill_ms_per_token > 0
         assert self.qos_decode_ms_per_token > 0
         assert 0 < self.qos_ewma_alpha <= 1
+        assert self.kv_reclaim_policy in ("recompute", "slo_aware")
+        assert (
+            0
+            <= self.kv_reclaim_min_keep_ratio
+            <= self.kv_reclaim_max_keep_ratio
+            <= 1
+        )
+        assert self.kv_reclaim_budget_scale_ms > 0
+        assert self.kv_reclaim_target_free_blocks >= 1
+        assert self.kv_compression_policy in ("none", "sink_recent", "query_aware")
+        assert self.kv_compression_sink_blocks >= 1
+        assert self.kv_compression_recent_blocks >= 1
+        assert self.kv_compression_importance_blocks >= 1
+        assert self.kv_compression_query_tokens >= 1
+        assert 0 <= self.kv_compression_trigger_free_ratio <= 1
         assert self.kv_cache_model_revision
         assert self.remote_kv_bandwidth_gbps > 0
         assert self.remote_kv_fixed_latency_ms >= 0

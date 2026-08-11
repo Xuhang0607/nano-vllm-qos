@@ -2,28 +2,27 @@
 
 ## 1. 项目名称
 
-**nano-vLLM-QoS：面向 SLO 的大模型推理调度与分层 KV Cache 系统**
+**nano-vLLM-QoS：面向 SLO 与显存压力的大模型推理引擎优化**
 
 技术栈：Python、PyTorch、CUDA、Triton、FlashAttention、FastAPI、Radix Tree、Paged KV
-Cache、Mooncake、WSL2、Qwen3-0.6B。
+Cache、Query-Aware KV Compression、Mooncake、WSL2、Qwen3-0.6B。
 
 ## 2. 推荐的简历描述
 
 下面这版适合放在一页中文技术简历中：
 
-> **nano-vLLM-QoS：大模型推理引擎二次开发**  |  个人项目
+> **nano-vLLM-QoS：大模型推理调度与 KV Cache 优化**  |  个人项目
 >
-> - 基于 nano-vLLM 二次开发 SLO 感知调度器 PALS，引入请求优先级、TTFT/TPOT/E2E
->   延迟预算、老化和执行时间 EWMA 估计，并接入 OpenAI 兼容流式对话服务。
-> - 在 RTX 4060 8GB + Qwen3-0.6B 上构建 2/5/20 req/s 多到达率 GPU 压力实验；相比
->   FCFS，PALS 将 Interactive E2E p95 降低 87.9% 到 96.5%，SLO 达成率由 0% 提升至
->   100%，总吞吐变化控制在 3.5% 内。
-> - 实现 Page-Aligned Radix Prefix Cache、Paged KV Cache 与 Mooncake Remote KV
->   Write-Back/Restore；定位固定 Catalog Key 使用 Insert 导致跨 Worker 读取旧快照的问题，
->   改为 Upsert 后连续 3 轮稳定恢复 1024 Token、读取约 112 MiB KV 数据。
-> - 构建可复现 Benchmark 框架，使用工作负载 SHA-256 指纹、逐请求 CSV、GPU 利用率/显存
->   采样与 Student-t 95% 置信区间，自动生成 FCFS/PALS、Hash/Radix、Local/Mooncake
->   Ablation 报告和性能曲线。
+> - 基于 nano-vLLM 改造 Scheduler 与 KV 执行路径，实现 Priority/Aging/SLO Slack 联合调度、
+>   Page-Aligned Radix Prefix Cache 及 OpenAI 兼容流式服务。
+> - 设计 Query-Aware KV 压缩：解耦 RoPE 逻辑位置与 FlashAttention 物理上下文，按
+>   Attention Sink、Query 相关历史页和 Recent Window 动态回收 GPU Page；固定压力负载下
+>   请求吞吐提升 70.1%，Batch E2E p95 降低 37.4%。
+> - 在 Qwen3-0.6B + RTX 4060 8GB 上构建 9 样本 Needle-in-a-Haystack 质量探针；压缩策略
+>   累计丢弃 40.5% KV Token 时命中 9/9，固定 Sink+Recent 基线命中 0/9，并实现抢占后的
+>   全量重计算安全回退。
+> - 建立重启隔离的 GPU Ablation 框架，采集 TTFT/TPOT/E2E、SLO Goodput、KV 重计算量、
+>   GPU 利用率和 Student-t 95% CI；另完成 Mooncake KV Write-Back/Restore 与持久化 Catalog。
 
 ## 3. 为什么这不是简单复现
 
@@ -31,22 +30,22 @@ Cache、Mooncake、WSL2、Qwen3-0.6B。
 数据的系统能力：
 
 1. 修改 Scheduler 决策目标，从到达顺序扩展为 Priority、Aging 和 SLO Slack 联合排序；
-2. 保留 FCFS 和 Hash Cache 作为基线，能够进行控制变量实验；
+2. 修改 Sequence、BlockManager、Scheduler 和 ModelRunner，支持逻辑/物理 KV 长度解耦和
+   Query-Aware 压缩，而不是只在 API 层增加配置；
 3. 新增真实 KV Page 序列化、远端写回、跨 Worker Catalog 重建与恢复状态机；
-4. 新增 OpenAI API、对话前端、请求取消、会话删除和运行指标；
-5. 不只展示成功案例，还报告 PALS 的 Batch 延迟代价和 Mooncake TCP Restore 更慢的结果。
+4. 保留 FCFS、Hash、全量重计算和不压缩策略作为控制变量基线；
+5. 不只展示正结果，也报告无损部分回收吞吐下降、Mooncake TCP Restore 慢于重计算等反例。
 
 ## 4. 一分钟项目介绍
 
-> 我基于 nano-vLLM 做了一个面向在线推理 QoS 的二次开发项目。原始 FCFS 调度在混合
-> Batch 和 Interactive 请求时，会让交互请求长时间等待 Decode，TTFT 可能不高，但 E2E
-> 尾延迟会超过 SLO。我实现了 PALS 调度器，根据优先级、等待老化、SLO 剩余时间和执行
-> 时间估计选择请求，并保留 FCFS 作为基线。
+> 我基于 nano-vLLM 做了一个面向在线 QoS 和显存压力的二次开发项目。调度侧实现 PALS，
+> 根据优先级、等待老化、SLO 剩余时间和执行时间估计选择请求；KV 侧实现 Query-Aware
+> 压缩，在保留 RoPE 原始位置的同时缩短 FlashAttention 实际读取的物理上下文。
 >
-> 我在 RTX 4060 上做了三档到达率、每组 3 轮的实机实验。PALS 将交互 E2E p95 降低
-> 87.9% 到 96.5%，SLO 从 0% 提升到 100%，总吞吐变化不超过 3.5%，而 GPU 利用率基本
-> 一致。项目还实现了 Radix Prefix Cache 和 Mooncake Remote KV，并修复了 Catalog
-> Insert/Upsert 语义导致跨 Worker 恢复失败的问题。
+> 在 RTX 4060 上的三轮固定压力实验中，Query-Aware 将请求吞吐提升 70.1%、Batch E2E
+> p95 降低 37.4%；9 样本 Needle 测试命中 9/9，而固定 Sink+Recent 为 0/9。我也保留了
+> 失败结果：无损部分回收虽然少重算 14.3% Token，但吞吐下降 7.3%，说明减少重计算不一定
+> 等价于端到端更快。项目还实现了 Radix Prefix Cache、Mooncake Remote KV 和可复现实验框架。
 
 ## 5. 面试官问“最难的问题是什么”
 
@@ -87,6 +86,19 @@ Catalog 无法覆盖。
 - 每组重复 3 轮，报告 Sample Standard Deviation 和 Student-t 95% CI；
 - 同时采集 GPU 利用率和显存，确认两种策略使用的硬件资源相近。
 
+### 难点四：压缩 KV 后为什么位置和 Attention 长度不能共用一个变量
+
+最初 nano-vLLM 默认“逻辑 Token 数 = 物理 KV Token 数”。删除中间页后，如果直接缩短
+位置编号，RoPE 会把后续 Token 当成前移，模型语义发生额外变化；如果仍把逻辑长度传给
+FlashAttention，又会读取不存在的 Block。
+
+修改方式：
+
+- Sequence 同时保存逻辑缓存长度、物理缓存长度和物理页对应的逻辑页号；
+- RoPE `positions` 使用逻辑位置，FlashAttention `context_lens` 使用物理长度；
+- BlockManager 只压缩完整页，并保持选中页按原逻辑顺序排列；
+- 压缩后禁用 Prefix 发布和 Remote Write-Back，抢占时回退全量重计算。
+
 ## 6. 指标应该怎样解释
 
 - **TTFT**：请求到第一个输出 Token 的时间，主要反映排队与 Prefill。
@@ -106,10 +118,16 @@ Catalog 无法覆盖。
 不要只写“使用了 RadixAttention、PagedAttention、Mooncake”。面试官更关心这些组件
 解决了什么问题、修改了哪些执行路径、如何验证以及有什么边界。
 
+不要写“KV 压缩 40.5% 且质量无损”。当前结论只来自 9 个定向 Needle 样本，应写成
+“在该 9 样本探针中命中 9/9”，并说明仍需 LongBench、多模型和真实业务验证。
+
 ## 8. 证据入口
 
 - 压力图：`assets/pals-pressure.svg`
 - 多到达率聚合报告：`benchmarks/results/repeated/pals-pressure-summary.md`
+- KV 压缩聚合报告：`benchmarks/results/repeated/kv-compression-none-vs-query.md`
+- KV 质量对照：`benchmarks/results/repeated/kv-quality-comparison-64.md`
+- Query-Aware 设计：`docs/query_aware_kv_compression_zh.md`
 - 实机实验方法：`docs/gpu_serving_benchmark_zh.md`
 - 调度器：`nanovllm/engine/scheduler.py`、`nanovllm/engine/qos.py`
 - Remote KV：`nanovllm/engine/remote_restore.py`、`nanovllm/engine/storage_backend.py`

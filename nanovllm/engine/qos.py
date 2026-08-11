@@ -40,6 +40,14 @@ class RequestMetrics:
     tpot_ms: Optional[float]
     e2e_ms: float
     preemptions: int
+    kv_reclaim_events: int
+    kv_reclaimed_blocks: int
+    kv_retained_blocks: int
+    kv_invalidated_tokens: int
+    kv_recomputed_tokens: int
+    kv_compression_events: int
+    kv_compression_dropped_blocks: int
+    kv_compression_dropped_tokens: int
     kv_restore_wait_ms: float
     kv_restored_tokens: int
     kv_restore_failures: int
@@ -112,6 +120,14 @@ def summarize_metrics(metrics: TypingSequence[RequestMetrics]):
             "e2e_ms_p50": 0.0,
             "e2e_ms_p95": 0.0,
             "preemptions": 0,
+            "kv_reclaim_events": 0,
+            "kv_reclaimed_blocks": 0,
+            "kv_retained_blocks": 0,
+            "kv_invalidated_tokens": 0,
+            "kv_recomputed_tokens": 0,
+            "kv_compression_events": 0,
+            "kv_compression_dropped_blocks": 0,
+            "kv_compression_dropped_tokens": 0,
             "kv_restore_wait_ms_p50": 0.0,
             "kv_restore_wait_ms_p95": 0.0,
             "kv_restored_tokens": 0,
@@ -140,6 +156,18 @@ def summarize_metrics(metrics: TypingSequence[RequestMetrics]):
         "e2e_ms_p50": median(e2e_values),
         "e2e_ms_p95": percentile(e2e_values, 0.95),
         "preemptions": sum(item.preemptions for item in metrics),
+        "kv_reclaim_events": sum(item.kv_reclaim_events for item in metrics),
+        "kv_reclaimed_blocks": sum(item.kv_reclaimed_blocks for item in metrics),
+        "kv_retained_blocks": sum(item.kv_retained_blocks for item in metrics),
+        "kv_invalidated_tokens": sum(item.kv_invalidated_tokens for item in metrics),
+        "kv_recomputed_tokens": sum(item.kv_recomputed_tokens for item in metrics),
+        "kv_compression_events": sum(item.kv_compression_events for item in metrics),
+        "kv_compression_dropped_blocks": sum(
+            item.kv_compression_dropped_blocks for item in metrics
+        ),
+        "kv_compression_dropped_tokens": sum(
+            item.kv_compression_dropped_tokens for item in metrics
+        ),
         "kv_restore_wait_ms_p50": median(restore_wait_values),
         "kv_restore_wait_ms_p95": percentile(restore_wait_values, 0.95),
         "kv_restored_tokens": sum(item.kv_restored_tokens for item in metrics),

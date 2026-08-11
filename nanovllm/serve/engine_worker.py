@@ -347,6 +347,7 @@ class InferenceWorker:
                             self._finish(engine, state, token_ids)
                     self._set_metrics(engine.get_scheduler_metrics(), len(active))
                 except Exception as exc:  # noqa: BLE001 - report failures per request
+                    LOGGER.exception("nano-vLLM engine step failed")
                     self._fail_active(engine, active, exc)
                     self._set_metrics(engine.get_scheduler_metrics(), 0)
         finally:

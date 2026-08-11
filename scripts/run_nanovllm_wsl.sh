@@ -15,6 +15,9 @@ export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.9}"
 export PATH="$CUDA_HOME/bin:$VENV_DIR/bin:$PATH"
 
 EXTRA_ARGS=()
+if [[ -n "${NUM_KVCACHE_BLOCKS:-}" ]]; then
+  EXTRA_ARGS+=(--num-kvcache-blocks "$NUM_KVCACHE_BLOCKS")
+fi
 if [[ "${ENABLE_MOONCAKE:-0}" == "1" ]]; then
   EXTRA_ARGS+=(
     --kv-storage-backend mooncake
@@ -38,6 +41,17 @@ exec "$VENV_DIR/bin/python" -m nanovllm.serve \
   --served-model-name Qwen3-0.6B \
   --scheduling-policy "$SCHEDULING_POLICY" \
   --prefix-cache-backend "$PREFIX_CACHE_BACKEND" \
+  --kv-reclaim-policy "${KV_RECLAIM_POLICY:-slo_aware}" \
+  --kv-reclaim-min-keep-ratio "${KV_RECLAIM_MIN_KEEP_RATIO:-0.0}" \
+  --kv-reclaim-max-keep-ratio "${KV_RECLAIM_MAX_KEEP_RATIO:-0.75}" \
+  --kv-reclaim-budget-scale-ms "${KV_RECLAIM_BUDGET_SCALE_MS:-1000}" \
+  --kv-reclaim-target-free-blocks "${KV_RECLAIM_TARGET_FREE_BLOCKS:-2}" \
+  --kv-compression-policy "${KV_COMPRESSION_POLICY:-none}" \
+  --kv-compression-sink-blocks "${KV_COMPRESSION_SINK_BLOCKS:-1}" \
+  --kv-compression-recent-blocks "${KV_COMPRESSION_RECENT_BLOCKS:-8}" \
+  --kv-compression-importance-blocks "${KV_COMPRESSION_IMPORTANCE_BLOCKS:-2}" \
+  --kv-compression-query-tokens "${KV_COMPRESSION_QUERY_TOKENS:-64}" \
+  --kv-compression-trigger-free-ratio "${KV_COMPRESSION_TRIGGER_FREE_RATIO:-0.15}" \
   --max-model-len "${MAX_MODEL_LEN}" \
   --max-num-seqs "$MAX_NUM_SEQS" \
   --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \

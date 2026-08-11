@@ -191,6 +191,8 @@ class LLMEngine:
 
         block_size = self.config.kvcache_block_size
         for seq in seqs:
+            if seq.kv_compressed:
+                continue
             previous_pages, completed_pages = completed_kv_page_span(
                 seq.num_cached_tokens,
                 seq.num_scheduled_tokens,
