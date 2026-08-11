@@ -50,7 +50,24 @@ CONFIG_FIELDS = (
     "max_model_len",
     "remote_kv_cost_aware",
     "workload_fingerprint",
+    "workload_label",
+    "interactive_delay_ms",
+    "interactive_arrival_rate_rps",
     "warmup_enabled",
+    "gpu_sampling_interval_ms",
+    "requests",
+)
+CROSS_GROUP_FIELDS = (
+    "model",
+    "hardware",
+    "max_num_seqs",
+    "max_model_len",
+    "workload_fingerprint",
+    "workload_label",
+    "interactive_delay_ms",
+    "interactive_arrival_rate_rps",
+    "warmup_enabled",
+    "gpu_sampling_interval_ms",
     "requests",
 )
 
@@ -109,6 +126,19 @@ def _run_metrics(run):
                 ][percentile]
         if summary["slo_attainment"] is not None:
             metrics[f"{class_name}.slo_attainment"] = summary["slo_attainment"]
+    gpu = run.get("gpu", {})
+    if gpu.get("available"):
+        for field in (
+            "utilization_gpu_percent",
+            "memory_used_mib",
+            "power_watts",
+        ):
+            summary = gpu.get(field)
+            if summary:
+                for statistic in ("mean", "p95", "max"):
+                    metrics[f"gpu.{field}.{statistic}"] = summary[statistic]
+        if gpu.get("peak_memory_fraction") is not None:
+            metrics["gpu.peak_memory_fraction"] = gpu["peak_memory_fraction"]
     return metrics
 
 
@@ -148,6 +178,16 @@ def aggregate_runs(runs, name: str):
 
 
 def compare_groups(baseline, candidate):
+    mismatches = [
+        field
+        for field in CROSS_GROUP_FIELDS
+        if baseline["configuration"].get(field)
+        != candidate["configuration"].get(field)
+    ]
+    if mismatches:
+        raise ValueError(
+            "comparison groups use different workloads: " + ", ".join(mismatches)
+        )
     common = sorted(set(baseline["metrics"]) & set(candidate["metrics"]))
     metrics = {}
     for field in common:

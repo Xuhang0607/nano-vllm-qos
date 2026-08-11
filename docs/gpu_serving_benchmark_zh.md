@@ -200,3 +200,36 @@ KV Page 的普通 `put` 路径。回归测试模拟“put 只插入、upsert 才
 实验可比性；定位并修复 Mooncake 可变 Catalog 的 Insert/Upsert 语义错误，在 3 轮跨
 Worker 实验中稳定恢复 1024 Token”。同时应明确单机 TCP Restore 在当前工作负载更慢，
 不要把功能闭环包装成不存在的性能提升。
+
+## 10. 多到达率 PALS 压力实验
+
+运行命令：
+
+```bash
+cd /mnt/d/nano-vllm-qos
+REPEATS=3 bash scripts/run_gpu_ablation_wsl.sh pressure
+```
+
+脚本固定 Qwen3-0.6B、RTX 4060 Laptop GPU、Radix、`max_num_seqs=1`、4 个 Batch 请求、
+8 个 Interactive 请求和输出长度，只修改交互请求到达间隔：
+
+| 档位 | 到达间隔 | 到达率 |
+| --- | ---: | ---: |
+| Low | 500 ms | 2 req/s |
+| Medium | 200 ms | 5 req/s |
+| High | 50 ms | 20 req/s |
+
+三轮结果为 `Mean +/- 95% CI Half Width`：
+
+| 到达率 | FCFS E2E p95 | PALS E2E p95 | 降低 | FCFS/PALS SLO | 吞吐变化 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 req/s | 8545 +/- 545 ms | 298 +/- 106 ms | 96.5% | 0% / 100% | -1.4% |
+| 5 req/s | 8505 +/- 298 ms | 746 +/- 69 ms | 91.2% | 0% / 100% | -3.5% |
+| 20 req/s | 9695 +/- 2133 ms | 1178 +/- 284 ms | 87.9% | 0% / 100% | -2.8% |
+
+三档 GPU 平均利用率约为 31% 到 35%，FCFS/PALS 峰值显存均约 6.3 GiB。PALS 的 Batch
+TTFT 和 E2E 会增加，但 Batch 仍满足本实验的 30 秒 E2E SLO。这体现了调度器真正的优化
+目标：以可控的 Batch 延迟换取交互请求尾延迟和整体 SLO Goodput，而不是声称所有指标
+都会同时改善。
+
+![PALS 多到达率 GPU 压力曲线](../assets/pals-pressure.svg)

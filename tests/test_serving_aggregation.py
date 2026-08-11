@@ -24,7 +24,11 @@ def make_run(policy="pals", throughput=2.0, fingerprint="same"):
             "max_model_len": 40960,
             "remote_kv_cost_aware": True,
             "workload_fingerprint": fingerprint,
+            "workload_label": "medium",
+            "interactive_delay_ms": 100,
+            "interactive_arrival_rate_rps": 10,
             "warmup_enabled": True,
+            "gpu_sampling_interval_ms": 200,
             "requests": 2,
         },
         "overall": {
@@ -47,6 +51,21 @@ def make_run(policy="pals", throughput=2.0, fingerprint="same"):
             "remote_io_backend_get_bytes": 0,
             "remote_io_backend_put_bytes": 0,
         },
+        "gpu": {
+            "available": True,
+            "utilization_gpu_percent": {
+                "mean": throughput * 10,
+                "p95": throughput * 15,
+                "max": throughput * 20,
+            },
+            "memory_used_mib": {
+                "mean": 6000,
+                "p95": 7000,
+                "max": 7200,
+            },
+            "power_watts": {"mean": 80, "p95": 90, "max": 95},
+            "peak_memory_fraction": 0.9,
+        },
     }
 
 
@@ -66,6 +85,7 @@ def test_aggregate_runs_validates_configuration_and_aggregates_metrics():
     assert group["runs"] == 2
     assert group["metrics"]["overall.request_throughput_rps"]["mean"] == 3
     assert group["metrics"]["interactive.e2e_ms_p95"]["mean"] == 6
+    assert group["metrics"]["gpu.utilization_gpu_percent.mean"]["mean"] == 30
 
     with pytest.raises(ValueError, match="workload_fingerprint"):
         aggregate_runs([make_run(), make_run(fingerprint="other")], "invalid")
@@ -83,3 +103,9 @@ def test_compare_groups_and_render_markdown():
     markdown = render_markdown(comparison)
     assert "Baseline: **hash** (1 runs)" in markdown
     assert "+50.0%" in markdown
+
+    incompatible = aggregate_runs(
+        [make_run(throughput=3, fingerprint="different")], "radix"
+    )
+    with pytest.raises(ValueError, match="different workloads"):
+        compare_groups(baseline, incompatible)

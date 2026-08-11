@@ -270,6 +270,18 @@ Interactive 的首 Token 延迟上升。原始 JSON、CSV 和自动生成的对�
 完整方法、原始结果和适用边界见
 [真实 GPU Serving Benchmark](docs/gpu_serving_benchmark_zh.md)。
 
+### 多到达率 PALS 压力曲线
+
+在 `2/5/20 req/s` 三档交互请求到达率下，FCFS/PALS 各重复 3 轮。PALS 将 Interactive
+E2E p95 分别降低 96.5%、91.2% 和 87.9%，三档 SLO 达成率均从 0% 提升到 100%；
+总请求吞吐变化不超过 3.5%，GPU 平均利用率和峰值显存基本一致。结果说明收益来自调度
+决策，而不是额外占用硬件资源。
+
+![PALS 多到达率 GPU 压力曲线](assets/pals-pressure.svg)
+
+可直接用于简历的项目描述、指标口径和面试讲解见
+[简历与面试指南](docs/resume_and_interview_zh.md)。
+
 ## 安装与原始推理链路
 
 完整模型推理需要满足上游项目的 CUDA 环境要求。典型的本地开发安装方式为：
@@ -408,10 +420,11 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 - [x] 输出 TTFT/TPOT/E2E p50/p95/p99、SLO Goodput、Prefix 命中块和 Mooncake 传输字节
 - [x] 完成 Hash/Radix 与 Local/Mooncake 三轮 GPU Ablation，并报告均值、标准差和 95% CI
 - [x] 修复 Mooncake 固定 Catalog Key 使用 Insert 导致跨 Worker 读取旧快照的问题，改为显式 Upsert
+- [x] 完成 2/5/20 req/s 多到达率 PALS 压力曲线，并采集 GPU 利用率、功耗与峰值显存
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
-- [ ] 增加重计算 Token、显存峰值和多到达率压力曲线
+- [ ] 增加重计算 Token 与 CUDA Kernel 级时间分解
 
 当前已有统一硬件上的三轮单机 GPU 对照。由于样本量仍小且 Mooncake 使用 WSL2 单机 TCP，
 简历应同时描述均值、置信区间和实验边界，不应把该百分比表述为 RDMA 或多机性能保证。
@@ -443,6 +456,7 @@ FCFS             -> Priority + SLO Slack 调度
 - [Windows 本地运行真实 Qwen3 模型](docs/windows_qwen3_zh.md)
 - [WSL2 运行 CUDA + Mooncake 完整链路](docs/wsl_mooncake_full_stack_zh.md)
 - [真实 GPU Serving Benchmark 与 Ablation](docs/gpu_serving_benchmark_zh.md)
+- [简历描述与面试讲解](docs/resume_and_interview_zh.md)
 - [相关论文](docs/papers.md)
 
 ## 致谢

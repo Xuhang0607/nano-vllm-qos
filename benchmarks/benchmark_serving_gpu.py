@@ -6,12 +6,15 @@ import argparse
 import csv
 import hashlib
 import json
+import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import pairwise
 from pathlib import Path
 from statistics import median
 
@@ -31,6 +34,14 @@ COUNTER_FIELDS = (
     "remote_io_backend_puts",
     "remote_io_backend_put_bytes",
     "remote_io_failures",
+)
+GPU_QUERY_FIELDS = (
+    "index",
+    "name",
+    "utilization.gpu",
+    "memory.used",
+    "memory.total",
+    "power.draw",
 )
 
 
@@ -61,6 +72,136 @@ class RequestSpec:
             "tpot_slo_ms": self.tpot_slo_ms,
             "e2e_slo_ms": self.e2e_slo_ms,
         }
+
+
+def _optional_float(value: str):
+    try:
+        return float(value.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_nvidia_smi_sample(line: str):
+    row = next(csv.reader([line]))
+    if len(row) != len(GPU_QUERY_FIELDS):
+        raise ValueError("nvidia-smi returned an unexpected column count")
+    index = _optional_float(row[0])
+    if index is None:
+        raise ValueError("nvidia-smi returned an invalid GPU index")
+    return {
+        "gpu_index": int(index),
+        "gpu_name": row[1].strip(),
+        "utilization_gpu_percent": _optional_float(row[2]),
+        "memory_used_mib": _optional_float(row[3]),
+        "memory_total_mib": _optional_float(row[4]),
+        "power_watts": _optional_float(row[5]),
+    }
+
+
+def _sample_summary(samples, field: str):
+    values = [sample[field] for sample in samples if sample.get(field) is not None]
+    if not values:
+        return None
+    return {
+        "mean": sum(values) / len(values),
+        "p95": percentile(values, 0.95),
+        "max": max(values),
+    }
+
+
+def summarize_gpu_samples(samples, error: str | None = None):
+    result = {
+        "available": bool(samples),
+        "sample_count": len(samples),
+        "error": error,
+    }
+    if not samples:
+        return result
+    result.update({
+        "gpu_index": samples[0]["gpu_index"],
+        "gpu_name": samples[0]["gpu_name"],
+        "utilization_gpu_percent": _sample_summary(
+            samples, "utilization_gpu_percent"
+        ),
+        "memory_used_mib": _sample_summary(samples, "memory_used_mib"),
+        "power_watts": _sample_summary(samples, "power_watts"),
+    })
+    totals = [
+        sample["memory_total_mib"]
+        for sample in samples
+        if sample.get("memory_total_mib") is not None
+    ]
+    result["memory_total_mib"] = max(totals) if totals else None
+    peak = result["memory_used_mib"]
+    result["peak_memory_fraction"] = (
+        peak["max"] / result["memory_total_mib"]
+        if peak and result["memory_total_mib"]
+        else None
+    )
+    return result
+
+
+class NvidiaSmiSampler:
+    def __init__(self, interval_ms: int = 200, gpu_index: int = 0):
+        if interval_ms <= 0 or gpu_index < 0:
+            raise ValueError("GPU sampling interval must be positive and index non-negative")
+        self.interval_ms = interval_ms
+        self.gpu_index = gpu_index
+        self.samples = []
+        self.error = None
+        self.process = None
+        self.thread = None
+
+    def start(self):
+        command = [
+            "nvidia-smi",
+            f"--id={self.gpu_index}",
+            "--query-gpu=" + ",".join(GPU_QUERY_FIELDS),
+            "--format=csv,noheader,nounits",
+            f"--loop-ms={self.interval_ms}",
+        ]
+        try:
+            self.process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except OSError as exc:
+            self.error = f"{type(exc).__name__}: {exc}"
+            return
+        self.thread = threading.Thread(
+            target=self._read_samples,
+            name="nanovllm-gpu-sampler",
+            daemon=True,
+        )
+        self.thread.start()
+
+    def _read_samples(self):
+        assert self.process is not None and self.process.stdout is not None
+        for line in self.process.stdout:
+            try:
+                self.samples.append(parse_nvidia_smi_sample(line))
+            except ValueError as exc:
+                self.error = f"{type(exc).__name__}: {exc}"
+
+    def stop(self):
+        if self.process is not None and self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=5)
+        if self.thread is not None:
+            self.thread.join(timeout=5)
+        if self.process is not None and not self.samples and self.process.stderr:
+            detail = self.process.stderr.read().strip()
+            if detail:
+                self.error = detail
+        return summarize_gpu_samples(self.samples, self.error)
 
 
 def percentile(values, ratio: float):
@@ -215,6 +356,28 @@ def workload_fingerprint(workload):
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
+def describe_workload(workload, label: str | None = None):
+    classes = {}
+    for item in workload:
+        classes[item.request_class] = classes.get(item.request_class, 0) + 1
+    arrivals = sorted(
+        item.arrival_ms for item in workload if item.request_class == "interactive"
+    )
+    delay_ms = None
+    if arrivals:
+        intervals = [arrivals[0]] + [
+            current - previous for previous, current in pairwise(arrivals)
+        ]
+        positive = [interval for interval in intervals if interval > 0]
+        delay_ms = median(positive) if positive else None
+    return {
+        "label": label,
+        "request_classes": classes,
+        "interactive_delay_ms": delay_ms,
+        "interactive_arrival_rate_rps": 1000.0 / delay_ms if delay_ms else None,
+    }
+
+
 def request_json(url, payload=None, api_key=None, timeout_s=120.0):
     headers = {"Accept": "application/json"}
     data = None
@@ -306,6 +469,9 @@ def run_live_benchmark(
     timeout_s: float = 120.0,
     warmup_prefix: str | None = None,
     hardware: str | None = None,
+    workload_label: str | None = None,
+    gpu_sampling_interval_ms: int | None = None,
+    gpu_index: int = 0,
 ):
     base_url = base_url.rstrip("/")
     health = request_json(f"{base_url}/health", api_key=api_key, timeout_s=timeout_s)
@@ -331,6 +497,10 @@ def run_live_benchmark(
             raise RuntimeError(f"warmup failed: {warmup_record['error']}")
 
     metrics_before = wait_for_idle(base_url, api_key, timeout_s)
+    gpu_sampler = None
+    if gpu_sampling_interval_ms is not None:
+        gpu_sampler = NvidiaSmiSampler(gpu_sampling_interval_ms, gpu_index)
+        gpu_sampler.start()
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=max(1, len(workload))) as executor:
         futures = [
@@ -347,9 +517,15 @@ def run_live_benchmark(
         ]
         records = [future.result() for future in as_completed(futures)]
     duration_s = time.perf_counter() - started
+    gpu_metrics = (
+        gpu_sampler.stop()
+        if gpu_sampler is not None
+        else summarize_gpu_samples([], "sampling disabled")
+    )
     records.sort(key=lambda item: item["request_id"])
     metrics_after = wait_for_idle(base_url, api_key, timeout_s)
     classes = sorted({record["request_class"] for record in records})
+    workload_metadata = describe_workload(workload, workload_label)
     return {
         "metadata": {
             "benchmark": "live nano-vLLM serving benchmark",
@@ -370,10 +546,17 @@ def run_live_benchmark(
             "kv_cache_capacity_tokens": metrics_before.get("kv_cache_capacity_tokens"),
             "remote_kv_cost_aware": metrics_before.get("remote_kv_cost_aware"),
             "workload_fingerprint": workload_fingerprint(workload),
+            "workload_label": workload_metadata["label"],
+            "interactive_delay_ms": workload_metadata["interactive_delay_ms"],
+            "interactive_arrival_rate_rps": workload_metadata[
+                "interactive_arrival_rate_rps"
+            ],
             "warmup_enabled": warmup_prefix is not None,
+            "gpu_sampling_interval_ms": gpu_sampling_interval_ms,
             "requests": len(workload),
         },
         "overall": summarize_records(records, duration_s),
+        "gpu": gpu_metrics,
         "by_class": {
             name: summarize_records(
                 [record for record in records if record["request_class"] == name],
@@ -465,6 +648,17 @@ def print_report(results):
         f"{cache['remote_io_transfer_bytes'] / 1024**2:.2f} MiB, "
         f"failures={cache['remote_io_failures']}"
     )
+    gpu = results["gpu"]
+    if gpu["available"]:
+        utilization = gpu["utilization_gpu_percent"]
+        memory = gpu["memory_used_mib"]
+        print(
+            "GPU: "
+            f"util mean={utilization['mean']:.1f}% p95={utilization['p95']:.1f}%, "
+            f"memory peak={memory['max']:.0f}/{gpu['memory_total_mib']:.0f} MiB"
+        )
+    else:
+        print(f"GPU sampling unavailable: {gpu['error']}")
 
 
 def main():
@@ -474,6 +668,7 @@ def main():
     parser.add_argument("--api-key")
     parser.add_argument("--hardware")
     parser.add_argument("--workload-id", default="gpu-ablation-v1")
+    parser.add_argument("--workload-label")
     parser.add_argument("--batch-requests", type=int, default=4)
     parser.add_argument("--interactive-requests", type=int, default=4)
     parser.add_argument("--shared-prefix-repeats", type=int, default=32)
@@ -481,6 +676,9 @@ def main():
     parser.add_argument("--batch-output-tokens", type=int, default=16)
     parser.add_argument("--interactive-output-tokens", type=int, default=8)
     parser.add_argument("--timeout-s", type=float, default=120.0)
+    parser.add_argument("--gpu-sampling-interval-ms", type=int, default=200)
+    parser.add_argument("--gpu-index", type=int, default=0)
+    parser.add_argument("--no-gpu-sampling", action="store_true")
     parser.add_argument("--no-warmup", action="store_true")
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-csv", type=Path)
@@ -491,6 +689,8 @@ def main():
         parser.error("at least one request is required")
     if args.shared_prefix_repeats <= 0:
         parser.error("shared-prefix-repeats must be positive")
+    if args.gpu_sampling_interval_ms <= 0 or args.gpu_index < 0:
+        parser.error("GPU sampling interval must be positive and index non-negative")
 
     workload = build_workload(
         args.batch_requests,
@@ -510,6 +710,9 @@ def main():
         args.timeout_s,
         None if args.no_warmup else shared_prefix,
         args.hardware,
+        args.workload_label,
+        None if args.no_gpu_sampling else args.gpu_sampling_interval_ms,
+        args.gpu_index,
     )
     print_report(results)
     output_csv = write_results(results, args.output_json, args.output_csv)

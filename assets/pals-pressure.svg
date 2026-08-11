@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="700" viewBox="0 0 1280 700">
+<rect width="100%" height="100%" fill="#ffffff" />
+<g font-family="Arial, Microsoft YaHei, sans-serif">
+<text x="60" y="46" font-size="26" font-weight="700" fill="#171a1f">PALS GPU Pressure Test</text>
+<text x="60" y="70" font-size="13" fill="#606772">Mean with 95% Student-t CI</text>
+<line x1="910" y1="47" x2="940" y2="47" stroke="#525866" stroke-width="3" />
+<text x="948" y="52" font-size="13">FCFS</text>
+<line x1="1060" y1="47" x2="1090" y2="47" stroke="#00856a" stroke-width="3" />
+<text x="1098" y="52" font-size="13">PALS</text>
+<text x="105" y="117" font-size="18" font-weight="600">Interactive E2E p95</text>
+<line x1="105" y1="565.0" x2="575" y2="565.0" stroke="#d9dde3" stroke-width="1" />
+<text x="95" y="569.0" text-anchor="end" font-size="12" fill="#606772">0.0</text>
+<line x1="105" y1="457.5" x2="575" y2="457.5" stroke="#d9dde3" stroke-width="1" />
+<text x="95" y="461.5" text-anchor="end" font-size="12" fill="#606772">3252.8</text>
+<line x1="105" y1="350.0" x2="575" y2="350.0" stroke="#d9dde3" stroke-width="1" />
+<text x="95" y="354.0" text-anchor="end" font-size="12" fill="#606772">6505.6</text>
+<line x1="105" y1="242.5" x2="575" y2="242.5" stroke="#d9dde3" stroke-width="1" />
+<text x="95" y="246.5" text-anchor="end" font-size="12" fill="#606772">9758.4</text>
+<line x1="105" y1="135.0" x2="575" y2="135.0" stroke="#d9dde3" stroke-width="1" />
+<text x="95" y="139.0" text-anchor="end" font-size="12" fill="#606772">13011.2</text>
+<text x="105.0" y="589" text-anchor="middle" font-size="12" fill="#3f454d">low (2.0)</text>
+<text x="340.0" y="589" text-anchor="middle" font-size="12" fill="#3f454d">medium (5.0)</text>
+<text x="575.0" y="589" text-anchor="middle" font-size="12" fill="#3f454d">high (20.0)</text>
+<polyline points="105.0,282.6 340.0,283.9 575.0,244.6" fill="none" stroke="#525866" stroke-width="3" stroke-linejoin="round" />
+<line x1="105.0" y1="264.6" x2="105.0" y2="300.6" stroke="#525866" stroke-width="1.5" />
+<line x1="100.0" y1="264.6" x2="110.0" y2="264.6" stroke="#525866" />
+<line x1="100.0" y1="300.6" x2="110.0" y2="300.6" stroke="#525866" />
+<circle cx="105.0" cy="282.6" r="5" fill="#525866" />
+<line x1="340.0" y1="274.1" x2="340.0" y2="293.8" stroke="#525866" stroke-width="1.5" />
+<line x1="335.0" y1="274.1" x2="345.0" y2="274.1" stroke="#525866" />
+<line x1="335.0" y1="293.8" x2="345.0" y2="293.8" stroke="#525866" />
+<circle cx="340.0" cy="283.9" r="5" fill="#525866" />
+<line x1="575.0" y1="174.1" x2="575.0" y2="315.1" stroke="#525866" stroke-width="1.5" />
+<line x1="570.0" y1="174.1" x2="580.0" y2="174.1" stroke="#525866" />
+<line x1="570.0" y1="315.1" x2="580.0" y2="315.1" stroke="#525866" />
+<circle cx="575.0" cy="244.6" r="5" fill="#525866" />
+<polyline points="105.0,555.2 340.0,540.3 575.0,526.1" fill="none" stroke="#00856a" stroke-width="3" stroke-linejoin="round" />
+<line x1="105.0" y1="551.7" x2="105.0" y2="558.6" stroke="#00856a" stroke-width="1.5" />
+<line x1="100.0" y1="551.7" x2="110.0" y2="551.7" stroke="#00856a" />
+<line x1="100.0" y1="558.6" x2="110.0" y2="558.6" stroke="#00856a" />
+<circle cx="105.0" cy="555.2" r="5" fill="#00856a" />
+<line x1="340.0" y1="538.1" x2="340.0" y2="542.6" stroke="#00856a" stroke-width="1.5" />
+<line x1="335.0" y1="538.1" x2="345.0" y2="538.1" stroke="#00856a" />
+<line x1="335.0" y1="542.6" x2="345.0" y2="542.6" stroke="#00856a" />
+<circle cx="340.0" cy="540.3" r="5" fill="#00856a" />
+<line x1="575.0" y1="516.7" x2="575.0" y2="535.5" stroke="#00856a" stroke-width="1.5" />
+<line x1="570.0" y1="516.7" x2="580.0" y2="516.7" stroke="#00856a" />
+<line x1="570.0" y1="535.5" x2="580.0" y2="535.5" stroke="#00856a" />
+<circle cx="575.0" cy="526.1" r="5" fill="#00856a" />
+<text x="47" y="350.0" text-anchor="middle" transform="rotate(-90 47 350.0)" font-size="12" fill="#606772">milliseconds</text>
+<text x="745" y="117" font-size="18" font-weight="600">SLO Goodput</text>
+<line x1="745" y1="565.0" x2="1215" y2="565.0" stroke="#d9dde3" stroke-width="1" />
+<text x="735" y="569.0" text-anchor="end" font-size="12" fill="#606772">0.0</text>
+<line x1="745" y1="457.5" x2="1215" y2="457.5" stroke="#d9dde3" stroke-width="1" />
+<text x="735" y="461.5" text-anchor="end" font-size="12" fill="#606772">0.4</text>
+<line x1="745" y1="350.0" x2="1215" y2="350.0" stroke="#d9dde3" stroke-width="1" />
+<text x="735" y="354.0" text-anchor="end" font-size="12" fill="#606772">0.7</text>
+<line x1="745" y1="242.5" x2="1215" y2="242.5" stroke="#d9dde3" stroke-width="1" />
+<text x="735" y="246.5" text-anchor="end" font-size="12" fill="#606772">1.1</text>
+<line x1="745" y1="135.0" x2="1215" y2="135.0" stroke="#d9dde3" stroke-width="1" />
+<text x="735" y="139.0" text-anchor="end" font-size="12" fill="#606772">1.5</text>
+<text x="745.0" y="589" text-anchor="middle" font-size="12" fill="#3f454d">low (2.0)</text>
+<text x="980.0" y="589" text-anchor="middle" font-size="12" fill="#3f454d">medium (5.0)</text>
+<text x="1215.0" y="589" text-anchor="middle" font-size="12" fill="#3f454d">high (20.0)</text>
+<polyline points="745.0,448.8 980.0,444.5 1215.0,447.6" fill="none" stroke="#525866" stroke-width="3" stroke-linejoin="round" />
+<line x1="745.0" y1="442.0" x2="745.0" y2="455.6" stroke="#525866" stroke-width="1.5" />
+<line x1="740.0" y1="442.0" x2="750.0" y2="442.0" stroke="#525866" />
+<line x1="740.0" y1="455.6" x2="750.0" y2="455.6" stroke="#525866" />
+<circle cx="745.0" cy="448.8" r="5" fill="#525866" />
+<line x1="980.0" y1="440.8" x2="980.0" y2="448.1" stroke="#525866" stroke-width="1.5" />
+<line x1="975.0" y1="440.8" x2="985.0" y2="440.8" stroke="#525866" />
+<line x1="975.0" y1="448.1" x2="985.0" y2="448.1" stroke="#525866" />
+<circle cx="980.0" cy="444.5" r="5" fill="#525866" />
+<line x1="1215.0" y1="423.9" x2="1215.0" y2="471.3" stroke="#525866" stroke-width="1.5" />
+<line x1="1210.0" y1="423.9" x2="1220.0" y2="423.9" stroke="#525866" />
+<line x1="1210.0" y1="471.3" x2="1220.0" y2="471.3" stroke="#525866" />
+<circle cx="1215.0" cy="447.6" r="5" fill="#525866" />
+<polyline points="745.0,221.4 980.0,216.0 1215.0,222.6" fill="none" stroke="#00856a" stroke-width="3" stroke-linejoin="round" />
+<line x1="745.0" y1="204.4" x2="745.0" y2="238.5" stroke="#00856a" stroke-width="1.5" />
+<line x1="740.0" y1="204.4" x2="750.0" y2="204.4" stroke="#00856a" />
+<line x1="740.0" y1="238.5" x2="750.0" y2="238.5" stroke="#00856a" />
+<circle cx="745.0" cy="221.4" r="5" fill="#00856a" />
+<line x1="980.0" y1="174.1" x2="980.0" y2="258.0" stroke="#00856a" stroke-width="1.5" />
+<line x1="975.0" y1="174.1" x2="985.0" y2="174.1" stroke="#00856a" />
+<line x1="975.0" y1="258.0" x2="985.0" y2="258.0" stroke="#00856a" />
+<circle cx="980.0" cy="216.0" r="5" fill="#00856a" />
+<line x1="1215.0" y1="213.5" x2="1215.0" y2="231.7" stroke="#00856a" stroke-width="1.5" />
+<line x1="1210.0" y1="213.5" x2="1220.0" y2="213.5" stroke="#00856a" />
+<line x1="1210.0" y1="231.7" x2="1220.0" y2="231.7" stroke="#00856a" />
+<circle cx="1215.0" cy="222.6" r="5" fill="#00856a" />
+<text x="687" y="350.0" text-anchor="middle" transform="rotate(-90 687 350.0)" font-size="12" fill="#606772">requests / second</text>
+<text x="640" y="660" text-anchor="middle" font-size="12" fill="#606772">Load label (interactive arrival rate in req/s)</text>
+</g>
+</svg>

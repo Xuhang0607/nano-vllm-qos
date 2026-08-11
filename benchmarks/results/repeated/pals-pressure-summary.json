@@ -1,0 +1,364 @@
+{
+  "title": "PALS Multi-Arrival-Rate GPU Pressure Test",
+  "baseline_name": "FCFS",
+  "candidate_name": "PALS",
+  "points": [
+    {
+      "label": "low",
+      "arrival_rate_rps": 2.0,
+      "baseline_name": "FCFS",
+      "candidate_name": "PALS",
+      "runs": 3,
+      "metrics": {
+        "interactive.e2e_ms_p95": {
+          "baseline": {
+            "samples": 3,
+            "mean": 8545.42246743525,
+            "stdev": 219.35990666664773,
+            "min": 8323.726323798837,
+            "max": 8762.36900095464,
+            "ci95_low": 8000.458269929139,
+            "ci95_high": 9090.386664941361,
+            "ci95_half_width": 544.9641975061113
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 297.9442959334846,
+            "stdev": 42.47341769698811,
+            "min": 269.4177140012471,
+            "max": 346.75707030110055,
+            "ci95_low": 192.4259615107965,
+            "ci95_high": 403.4626303561728,
+            "ci95_half_width": 105.51833442268813
+          }
+        },
+        "interactive.slo_attainment": {
+          "baseline": {
+            "samples": 3,
+            "mean": 0.0,
+            "stdev": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "ci95_low": 0.0,
+            "ci95_high": 0.0,
+            "ci95_half_width": 0.0
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1.0,
+            "stdev": 0.0,
+            "min": 1.0,
+            "max": 1.0,
+            "ci95_low": 1.0,
+            "ci95_high": 1.0,
+            "ci95_half_width": 0.0
+          }
+        },
+        "overall.slo_goodput_rps": {
+          "baseline": {
+            "samples": 3,
+            "mean": 0.3917162782559082,
+            "stdev": 0.00922103262411591,
+            "min": 0.38192439738545403,
+            "max": 0.40023392332005453,
+            "ci95_low": 0.3688081145876245,
+            "ci95_high": 0.4146244419241919,
+            "ci95_half_width": 0.02290816366828368
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1.1585861166460116,
+            "stdev": 0.023123488492187667,
+            "min": 1.132084970317871,
+            "max": 1.1746585070471112,
+            "ci95_low": 1.1011395506751536,
+            "ci95_high": 1.2160326826168697,
+            "ci95_half_width": 0.057446565970858086
+          }
+        },
+        "gpu.utilization_gpu_percent.mean": {
+          "baseline": {
+            "samples": 3,
+            "mean": 34.59704876822524,
+            "stdev": 0.9032230905640529,
+            "min": 33.56,
+            "max": 35.21153846153846,
+            "ci95_low": 32.353137133697416,
+            "ci95_high": 36.84096040275307,
+            "ci95_half_width": 2.2439116345278256
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 34.025033912936244,
+            "stdev": 1.3088106808162134,
+            "min": 32.529411764705884,
+            "max": 34.96078431372549,
+            "ci95_low": 30.77350553112334,
+            "ci95_high": 37.27656229474915,
+            "ci95_half_width": 3.2515283818129053
+          }
+        },
+        "gpu.memory_used_mib.max": {
+          "baseline": {
+            "samples": 3,
+            "mean": 6352.333333333333,
+            "stdev": 27.227437142216182,
+            "min": 6331.0,
+            "max": 6383.0,
+            "ci95_low": 6284.691170926214,
+            "ci95_high": 6419.975495740452,
+            "ci95_half_width": 67.64216240711936
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 6362.333333333333,
+            "stdev": 34.01960219246153,
+            "min": 6329.0,
+            "max": 6397.0,
+            "ci95_low": 6277.817135774653,
+            "ci95_high": 6446.849530892013,
+            "ci95_half_width": 84.5161975586797
+          }
+        }
+      }
+    },
+    {
+      "label": "medium",
+      "arrival_rate_rps": 5.0,
+      "baseline_name": "FCFS",
+      "candidate_name": "PALS",
+      "runs": 3,
+      "metrics": {
+        "interactive.e2e_ms_p95": {
+          "baseline": {
+            "samples": 3,
+            "mean": 8504.966965117274,
+            "stdev": 119.99894533425538,
+            "min": 8372.927614201399,
+            "max": 8607.37282254886,
+            "ci95_low": 8206.849000264925,
+            "ci95_high": 8803.084929969622,
+            "ci95_half_width": 298.11796485234885
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 746.3433038668882,
+            "stdev": 27.67463640447088,
+            "min": 725.0174597491423,
+            "max": 777.616703349122,
+            "ci95_low": 677.5901472458156,
+            "ci95_high": 815.0964604879607,
+            "ci95_half_width": 68.75315662107255
+          }
+        },
+        "interactive.slo_attainment": {
+          "baseline": {
+            "samples": 3,
+            "mean": 0.0,
+            "stdev": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "ci95_low": 0.0,
+            "ci95_high": 0.0,
+            "ci95_half_width": 0.0
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1.0,
+            "stdev": 0.0,
+            "min": 1.0,
+            "max": 1.0,
+            "ci95_low": 1.0,
+            "ci95_high": 1.0,
+            "ci95_half_width": 0.0
+          }
+        },
+        "overall.slo_goodput_rps": {
+          "baseline": {
+            "samples": 3,
+            "mean": 0.4064530856493274,
+            "stdev": 0.004947487817706318,
+            "min": 0.40185025540575753,
+            "max": 0.4116850469690098,
+            "ci95_low": 0.3941618526285872,
+            "ci95_high": 0.4187443186700676,
+            "ci95_half_width": 0.012291233020740183
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1.1768209022323761,
+            "stdev": 0.056922027846388064,
+            "min": 1.1309997143844301,
+            "max": 1.2405411924587895,
+            "ci95_low": 1.035407333558371,
+            "ci95_high": 1.3182344709063814,
+            "ci95_half_width": 0.14141356867400534
+          }
+        },
+        "gpu.utilization_gpu_percent.mean": {
+          "baseline": {
+            "samples": 3,
+            "mean": 32.819319727891155,
+            "stdev": 1.4734785082726007,
+            "min": 31.122448979591837,
+            "max": 33.775510204081634,
+            "ci95_low": 29.158700770646817,
+            "ci95_high": 36.479938685135494,
+            "ci95_half_width": 3.66061895724434
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 30.814415013707467,
+            "stdev": 0.9142391498108249,
+            "min": 30.229166666666668,
+            "max": 31.867924528301888,
+            "ci95_low": 28.543135762287736,
+            "ci95_high": 33.085694265127195,
+            "ci95_half_width": 2.2712792514197306
+          }
+        },
+        "gpu.memory_used_mib.max": {
+          "baseline": {
+            "samples": 3,
+            "mean": 6409.0,
+            "stdev": 35.53871128783372,
+            "min": 6387.0,
+            "max": 6450.0,
+            "ci95_low": 6320.7098216730765,
+            "ci95_high": 6497.2901783269235,
+            "ci95_half_width": 88.29017832692378
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 6394.0,
+            "stdev": 10.44030650891055,
+            "min": 6387.0,
+            "max": 6406.0,
+            "ci95_low": 6368.06274763331,
+            "ci95_high": 6419.93725236669,
+            "ci95_half_width": 25.937252366689375
+          }
+        }
+      }
+    },
+    {
+      "label": "high",
+      "arrival_rate_rps": 20.0,
+      "baseline_name": "FCFS",
+      "candidate_name": "PALS",
+      "runs": 3,
+      "metrics": {
+        "interactive.e2e_ms_p95": {
+          "baseline": {
+            "samples": 3,
+            "mean": 9695.237376798468,
+            "stdev": 858.6118341844505,
+            "min": 9123.609572749046,
+            "max": 10682.582120646839,
+            "ci95_low": 7562.1551910157805,
+            "ci95_high": 11828.319562581157,
+            "ci95_half_width": 2133.0821857826877
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1177.783919197221,
+            "stdev": 114.31742207310269,
+            "min": 1103.2263091477944,
+            "max": 1309.3990643948928,
+            "ci95_low": 893.7807796640294,
+            "ci95_high": 1461.7870587304124,
+            "ci95_half_width": 284.00313953319153
+          }
+        },
+        "interactive.slo_attainment": {
+          "baseline": {
+            "samples": 3,
+            "mean": 0.0,
+            "stdev": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "ci95_low": 0.0,
+            "ci95_high": 0.0,
+            "ci95_half_width": 0.0
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1.0,
+            "stdev": 0.0,
+            "min": 1.0,
+            "max": 1.0,
+            "ci95_low": 1.0,
+            "ci95_high": 1.0,
+            "ci95_half_width": 0.0
+          }
+        },
+        "overall.slo_goodput_rps": {
+          "baseline": {
+            "samples": 3,
+            "mean": 0.39581220689929836,
+            "stdev": 0.03216086061944226,
+            "min": 0.358868593599948,
+            "max": 0.4175547983285393,
+            "ci95_low": 0.3159137520498687,
+            "ci95_high": 0.475710661748728,
+            "ci95_half_width": 0.07989845484942962
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 1.1547130377447068,
+            "stdev": 0.012317890687542736,
+            "min": 1.1406089424514714,
+            "max": 1.1633576628493314,
+            "ci95_low": 1.1241112312636987,
+            "ci95_high": 1.1853148442257149,
+            "ci95_half_width": 0.030601806481007993
+          }
+        },
+        "gpu.utilization_gpu_percent.mean": {
+          "baseline": {
+            "samples": 3,
+            "mean": 34.077806122448976,
+            "stdev": 0.9900695563788114,
+            "min": 32.93877551020408,
+            "max": 34.732142857142854,
+            "ci95_low": 31.61813849463973,
+            "ci95_high": 36.53747375025822,
+            "ci95_half_width": 2.459667627809244
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 34.40312046444122,
+            "stdev": 1.2090484768507732,
+            "min": 33.36538461538461,
+            "max": 35.73076923076923,
+            "ci95_low": 31.39943513768617,
+            "ci95_high": 37.40680579119628,
+            "ci95_half_width": 3.0036853267550536
+          }
+        },
+        "gpu.memory_used_mib.max": {
+          "baseline": {
+            "samples": 3,
+            "mean": 6430.0,
+            "stdev": 25.0,
+            "min": 6405.0,
+            "max": 6455.0,
+            "ci95_low": 6367.891544791926,
+            "ci95_high": 6492.108455208074,
+            "ci95_half_width": 62.108455208074
+          },
+          "candidate": {
+            "samples": 3,
+            "mean": 6418.333333333333,
+            "stdev": 3.0550504633038935,
+            "min": 6415.0,
+            "max": 6421.0,
+            "ci95_low": 6410.743554738992,
+            "ci95_high": 6425.923111927674,
+            "ci95_half_width": 7.589778594340623
+          }
+        }
+      }
+    }
+  ]
+}

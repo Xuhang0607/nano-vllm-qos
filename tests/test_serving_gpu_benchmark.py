@@ -5,7 +5,10 @@ import pytest
 
 from benchmarks.benchmark_serving_gpu import (
     build_workload,
+    describe_workload,
     metric_deltas,
+    parse_nvidia_smi_sample,
+    summarize_gpu_samples,
     summarize_records,
     workload_fingerprint,
     write_results,
@@ -53,6 +56,32 @@ def test_build_workload_has_fixed_classes_priorities_and_arrivals():
     assert workload_fingerprint(workload) != workload_fingerprint(
         build_workload(2, 2, "different", shared_prefix_repeats=2)
     )
+    description = describe_workload(workload, "medium")
+    assert description["label"] == "medium"
+    assert description["request_classes"] == {"batch": 2, "interactive": 2}
+    assert description["interactive_delay_ms"] == 100
+    assert description["interactive_arrival_rate_rps"] == 10
+
+
+def test_gpu_sample_parser_and_summary_handle_optional_power():
+    first = parse_nvidia_smi_sample(
+        "0, NVIDIA GeForce RTX 4060 Laptop GPU, 75, 7000, 8188, 88.5"
+    )
+    second = parse_nvidia_smi_sample(
+        "0, NVIDIA GeForce RTX 4060 Laptop GPU, 95, 7200, 8188, [N/A]"
+    )
+
+    summary = summarize_gpu_samples([first, second])
+
+    assert summary["available"] is True
+    assert summary["sample_count"] == 2
+    assert summary["utilization_gpu_percent"]["mean"] == 85
+    assert summary["memory_used_mib"]["max"] == 7200
+    assert summary["power_watts"]["mean"] == 88.5
+    assert summary["peak_memory_fraction"] == pytest.approx(7200 / 8188)
+
+    with pytest.raises(ValueError, match="column count"):
+        parse_nvidia_smi_sample("0, incomplete")
 
 
 def test_summary_reports_percentiles_throughput_and_slo_goodput():

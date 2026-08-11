@@ -303,6 +303,19 @@ This result explains why the default cost-aware planner rejects that restore
 on this hardware. See the
 [Chinese live GPU benchmark guide](docs/gpu_serving_benchmark_zh.md).
 
+### Multi-Arrival-Rate PALS Pressure Test
+
+FCFS and PALS were each repeated three times at interactive arrival rates of
+2, 5, and 20 req/s. PALS reduced interactive E2E p95 by 96.5%, 91.2%, and
+87.9%, while moving SLO attainment from 0% to 100% at every load. Total request
+throughput stayed within 3.5%, and mean GPU utilization and peak memory were
+comparable, isolating the gain to scheduling rather than additional hardware.
+
+![PALS multi-arrival-rate GPU pressure chart](assets/pals-pressure.svg)
+
+The [Chinese resume and interview guide](docs/resume_and_interview_zh.md)
+documents claim wording, metric scope, and source-level talking points.
+
 ## Installation and Original Inference Path
 
 For full model inference, follow the upstream environment requirements. A
@@ -453,10 +466,11 @@ design.
 - [x] Live TTFT/TPOT/E2E p50/p95/p99, SLO goodput, prefix blocks, and Mooncake byte counters
 - [x] Three-run Hash/Radix and local/Mooncake GPU ablations with mean, standard deviation, and 95% CI
 - [x] Mutable Mooncake catalog upsert fix validated by cross-worker restore
+- [x] 2/5/20 req/s PALS pressure curves with GPU utilization, power, and peak-memory sampling
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
-- [ ] Add recomputed-token, peak-memory, and multi-arrival-rate pressure curves
+- [ ] Add recomputed-token counters and CUDA-kernel-level time decomposition
 
 The repository now includes three-trial single-machine GPU comparisons. Claims
 should still include confidence intervals and state that Mooncake used WSL2
@@ -475,6 +489,7 @@ TCP, rather than generalizing these results to RDMA or multi-node deployments.
 - [Run the real Qwen3 model on Windows (Chinese)](docs/windows_qwen3_zh.md)
 - [Run the CUDA + Mooncake full stack on WSL2 (Chinese)](docs/wsl_mooncake_full_stack_zh.md)
 - [Live GPU serving benchmark and ablation (Chinese)](docs/gpu_serving_benchmark_zh.md)
+- [Resume wording and interview guide (Chinese)](docs/resume_and_interview_zh.md)
 - [Related papers](docs/papers.md)
 
 ## Acknowledgements

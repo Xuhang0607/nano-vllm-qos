@@ -160,6 +160,50 @@ run_scheduler_suite() {
     "${fcfs_files[@]}" -- "${pals_files[@]}"
 }
 
+run_pressure_level() {
+  local label="$1"
+  local delay_ms="$2"
+  local fcfs_files=()
+  local pals_files=()
+  for run in $(seq 1 "$REPEATS"); do
+    start_worker "pressure-$label-fcfs-$run" fcfs radix 0 1
+    local fcfs="$RESULTS_DIR/pressure-$label-fcfs-$run.json"
+    run_benchmark "$fcfs" "pressure-$label-v1" \
+      --workload-label "$label" \
+      --batch-requests 4 --interactive-requests 8 \
+      --interactive-delay-ms "$delay_ms" \
+      --shared-prefix-repeats 32 --batch-output-tokens 64 \
+      --interactive-output-tokens 4
+    fcfs_files+=("$fcfs")
+
+    start_worker "pressure-$label-pals-$run" pals radix 0 1
+    local pals="$RESULTS_DIR/pressure-$label-pals-$run.json"
+    run_benchmark "$pals" "pressure-$label-v1" \
+      --workload-label "$label" \
+      --batch-requests 4 --interactive-requests 8 \
+      --interactive-delay-ms "$delay_ms" \
+      --shared-prefix-repeats 32 --batch-output-tokens 64 \
+      --interactive-output-tokens 4
+    pals_files+=("$pals")
+  done
+  aggregate_groups FCFS PALS "pressure-$label-fcfs-vs-pals" \
+    "${fcfs_files[@]}" -- "${pals_files[@]}"
+}
+
+run_pressure_suite() {
+  run_pressure_level low 500
+  run_pressure_level medium 200
+  run_pressure_level high 50
+  "$VENV_DIR/bin/python" -m benchmarks.render_pressure_report \
+    --comparisons \
+      "$RESULTS_DIR/pressure-low-fcfs-vs-pals.json" \
+      "$RESULTS_DIR/pressure-medium-fcfs-vs-pals.json" \
+      "$RESULTS_DIR/pressure-high-fcfs-vs-pals.json" \
+    --output-json "$RESULTS_DIR/pals-pressure-summary.json" \
+    --output-markdown "$RESULTS_DIR/pals-pressure-summary.md" \
+    --output-svg "$PROJECT_DIR/assets/pals-pressure.svg"
+}
+
 run_prefix_suite() {
   local hash_files=()
   local radix_files=()
@@ -212,7 +256,8 @@ run_remote_suite() {
 
 case "$SUITE" in
   scheduler) run_scheduler_suite ;;
+  pressure) run_pressure_suite ;;
   prefix) run_prefix_suite ;;
   remote) run_remote_suite ;;
-  *) echo "usage: $0 {scheduler|prefix|remote}" >&2; exit 2 ;;
+  *) echo "usage: $0 {scheduler|pressure|prefix|remote}" >&2; exit 2 ;;
 esac
