@@ -1,10 +1,13 @@
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from hashlib import blake2b
-from typing import Iterable, Mapping, Protocol
+from typing import Protocol
 
 
 class KVStorageBackend(Protocol):
     def put(self, key: str, payload: bytes): ...
+
+    def upsert(self, key: str, payload: bytes): ...
 
     def get(self, key: str) -> bytes | None: ...
 
@@ -28,6 +31,9 @@ class InMemoryKVStore:
         self.objects = {}
 
     def put(self, key: str, payload: bytes):
+        self.objects[key] = bytes(payload)
+
+    def upsert(self, key: str, payload: bytes):
         self.objects[key] = bytes(payload)
 
     def get(self, key: str):
@@ -143,6 +149,12 @@ class MooncakeKVStore:
 
     def put(self, key: str, payload: bytes):
         self._check_status(self.store.put(key, payload), "put")
+
+    def upsert(self, key: str, payload: bytes):
+        self._check_status(
+            self.store.upsert_batch([key], [payload]),
+            "upsert",
+        )
 
     def get(self, key: str):
         return self.store.get(key)

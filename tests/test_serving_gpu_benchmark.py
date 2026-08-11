@@ -7,6 +7,7 @@ from benchmarks.benchmark_serving_gpu import (
     build_workload,
     metric_deltas,
     summarize_records,
+    workload_fingerprint,
     write_results,
 )
 
@@ -46,6 +47,12 @@ def test_build_workload_has_fixed_classes_priorities_and_arrivals():
     assert [item.priority for item in workload] == [0, 0, 10, 10]
     assert [item.arrival_ms for item in workload] == [0, 0, 100, 200]
     assert workload[0].messages[0][1] == workload[1].messages[0][1]
+    assert workload_fingerprint(workload) == workload_fingerprint(
+        build_workload(2, 2, "test", shared_prefix_repeats=2)
+    )
+    assert workload_fingerprint(workload) != workload_fingerprint(
+        build_workload(2, 2, "different", shared_prefix_repeats=2)
+    )
 
 
 def test_summary_reports_percentiles_throughput_and_slo_goodput():

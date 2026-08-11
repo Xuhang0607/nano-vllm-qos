@@ -357,7 +357,11 @@ class RemoteKVRestoreService:
                 raise ValueError("persistent catalog identity does not match this engine")
             envelope = RemoteCatalogSnapshotCodec.encode(snapshot)
             future = self._submit(
-                self._coordinator.put(self._catalog_key, envelope)
+                self._coordinator.put(
+                    self._catalog_key,
+                    envelope,
+                    overwrite=True,
+                )
             )
             self._pending_catalog_saves.append(future)
             self._catalog_metrics["catalog_save_submitted"] += 1

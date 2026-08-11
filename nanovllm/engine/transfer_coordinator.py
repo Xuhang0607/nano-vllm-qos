@@ -126,10 +126,12 @@ class AsyncKVTransferCoordinator:
         payload: bytes,
         generation: int,
         previous: asyncio.Task | None,
+        overwrite: bool = False,
     ) -> bytes | None:
         await self._wait_for_previous(previous)
         try:
-            await asyncio.to_thread(self.backend.put, key, payload)
+            operation = self.backend.upsert if overwrite else self.backend.put
+            await asyncio.to_thread(operation, key, payload)
             self._metrics.backend_put_bytes += len(payload)
         except Exception as exc:
             await self._finish_failure(key, generation, exc)
@@ -217,7 +219,7 @@ class AsyncKVTransferCoordinator:
             if not retry_after_wait:
                 return result
 
-    async def put(self, key: str, payload: bytes) -> None:
+    async def put(self, key: str, payload: bytes, overwrite: bool = False) -> None:
         self._ensure_open()
         if not key:
             raise ValueError("key must not be empty")
@@ -231,7 +233,13 @@ class AsyncKVTransferCoordinator:
             entry.error = None
             previous = entry.io_tail
             task = asyncio.create_task(
-                self._put(key, payload, entry.generation, previous)
+                self._put(
+                    key,
+                    payload,
+                    entry.generation,
+                    previous,
+                    overwrite,
+                )
             )
             entry.task = task
             entry.io_tail = task

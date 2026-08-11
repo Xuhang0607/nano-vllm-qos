@@ -42,6 +42,7 @@ def test_mooncake_serving_options_can_be_overridden(monkeypatch):
             "50",
             "--remote-kv-fixed-latency-ms",
             "0.2",
+            "--remote-kv-force-restore",
         ],
     )
 
@@ -51,3 +52,4 @@ def test_mooncake_serving_options_can_be_overridden(monkeypatch):
     assert args.mooncake_local_buffer_mib == 768
     assert args.remote_kv_bandwidth_gbps == 50
     assert args.remote_kv_fixed_latency_ms == 0.2
+    assert args.remote_kv_force_restore is True

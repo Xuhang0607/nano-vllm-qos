@@ -1,0 +1,2 @@
+﻿request_id,request_class,priority,arrival_ms,success,client_e2e_ms,prompt_tokens,completion_tokens,queue_ms,ttft_ms,tpot_ms,e2e_ms,ttft_slo_met,tpot_slo_met,e2e_slo_met,preemptions,kv_restored_tokens,error
+batch-0,batch,0,0.0,True,2786.360699996294,1082,4,856.7619169989484,1895.1615859987214,276.28970699879574,2724.0307069951086,True,True,True,0,1024,

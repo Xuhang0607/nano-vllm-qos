@@ -293,8 +293,14 @@ blocks, and Mooncake GET/PUT bytes. The FCFS/PALS run holds Qwen3-0.6B, Radix,
 PALS protects interactive E2E SLO with almost unchanged throughput, while
 increasing first-token latency for both classes. Raw JSON, request-level CSV,
 and the generated comparison table live in [`benchmarks/results`](benchmarks/results).
-These are single-machine small-sample measurements; repeat trials and report
-variance before using exact percentages as resume claims. See the
+The repository also includes repeatable ablation orchestration and Student-t
+95% confidence intervals. Across three RTX 4060 Laptop GPU trials, both Hash
+and Radix reached 100% block hits, but their throughput and E2E intervals
+overlapped. Forced Mooncake restore fetched 117,441,336 bytes and restored
+1024 tokens in every trial; single-machine TCP TTFT was
+`2027.1 +/- 284.7 ms`, versus `1076.0 +/- 75.4 ms` for local recomputation.
+This result explains why the default cost-aware planner rejects that restore
+on this hardware. See the
 [Chinese live GPU benchmark guide](docs/gpu_serving_benchmark_zh.md).
 
 ## Installation and Original Inference Path
@@ -421,6 +427,7 @@ use `python -m scripts.mooncake_smoke --protocol tcp`.
 | `scripts/serve_transformers_windows.py` | Explicitly labeled real-model fallback for native Windows |
 | `scripts/run_mooncake_wsl.sh` | Mooncake Master and persistent Store Service launch entrypoint |
 | `scripts/run_nanovllm_wsl.sh` | Full Qwen3 CUDA/PALS/Radix/Mooncake serving entrypoint |
+| `scripts/run_gpu_ablation_wsl.sh` | Restart-isolated scheduler/prefix/remote-KV repeated GPU ablations |
 | `benchmarks/` | Deterministic simulations, live GPU load generator, and ablation comparison tools |
 | `tests/` | Control-plane unit, race, benchmark, and adapter tests |
 | `docs/` | Chinese design notes and paper reading list |
@@ -444,16 +451,16 @@ design.
 - [x] WSL2 Qwen3 CUDA + Mooncake TCP write-back and cross-worker restart restore
 - [x] FCFS/PALS GPU scheduler comparison under a fixed model, device, and request trace
 - [x] Live TTFT/TPOT/E2E p50/p95/p99, SLO goodput, prefix blocks, and Mooncake byte counters
+- [x] Three-run Hash/Radix and local/Mooncake GPU ablations with mean, standard deviation, and 95% CI
+- [x] Mutable Mooncake catalog upsert fix validated by cross-worker restore
 - [ ] Overlap KV transfer with inference by using dedicated CUDA streams and events
 - [ ] Multi-replica catalog consistency using backend CAS or transactional metadata
 - [ ] Tensor-parallel shard restore and cross-rank completion synchronization
-- [ ] Repeat Hash/Radix and local/Mooncake GPU ablations and report variance
 - [ ] Add recomputed-token, peak-memory, and multi-arrival-rate pressure curves
 
-The repository now includes a documented single-machine GPU comparison. Until
-it is repeated with variance reporting, resume claims should describe the
-observed trend and benchmark framework rather than present one-run percentages
-as a general performance guarantee.
+The repository now includes three-trial single-machine GPU comparisons. Claims
+should still include confidence intervals and state that Mooncake used WSL2
+TCP, rather than generalizing these results to RDMA or multi-node deployments.
 
 ## Documentation
 

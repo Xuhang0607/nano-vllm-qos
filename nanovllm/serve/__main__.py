@@ -40,6 +40,11 @@ def parse_args():
     parser.add_argument("--mooncake-local-buffer-mib", type=int, default=512)
     parser.add_argument("--remote-kv-bandwidth-gbps", type=float, default=12.5)
     parser.add_argument("--remote-kv-fixed-latency-ms", type=float, default=0.3)
+    parser.add_argument(
+        "--remote-kv-force-restore",
+        action="store_true",
+        help="Disable the cost planner and restore every matching remote prefix",
+    )
     return parser.parse_args()
 
 
@@ -78,6 +83,7 @@ def main():
                 "enforce_eager": args.enforce_eager,
                 "remote_kv_bandwidth_gbps": args.remote_kv_bandwidth_gbps,
                 "remote_kv_fixed_latency_ms": args.remote_kv_fixed_latency_ms,
+                "remote_kv_cost_aware": not args.remote_kv_force_restore,
             }
             backend = None
             if args.kv_storage_backend == "mooncake":

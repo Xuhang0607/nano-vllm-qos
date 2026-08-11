@@ -13,10 +13,15 @@ from nanovllm.engine.storage_backend import InMemoryKVStore
 
 
 class FailingCatalogStore(InMemoryKVStore):
-    def put(self, key, payload):
+    def upsert(self, key, payload):
         if key == "catalog":
             raise OSError("catalog storage unavailable")
-        super().put(key, payload)
+        super().upsert(key, payload)
+
+
+class InsertOnlyStore(InMemoryKVStore):
+    def put(self, key, payload):
+        self.objects.setdefault(key, bytes(payload))
 
 
 def make_branched_prefixes():
@@ -88,6 +93,34 @@ def test_service_restart_recovers_the_latest_persistent_catalog():
         assert restarted.catalog.match(second[0]) == second[1]
         assert restarted.metrics()["catalog_loaded_prefixes"] == 2
         restarted.catalog.validate()
+    finally:
+        restarted.close()
+
+
+def test_catalog_updates_use_upsert_when_plain_put_is_insert_only():
+    first, second = make_branched_prefixes()
+    backend = InsertOnlyStore()
+    service = RemoteKVRestoreService(
+        backend,
+        catalog_key="catalog",
+        catalog_identity=("model-a", 0),
+    )
+    try:
+        service.register_existing_prefix(*first)
+        service.flush_catalog_saves(wait_for_all=True, timeout=2)
+        service.register_existing_prefix(*second)
+        service.flush_catalog_saves(wait_for_all=True, timeout=2)
+    finally:
+        service.close()
+
+    restarted = RemoteKVRestoreService(
+        backend,
+        catalog_key="catalog",
+        catalog_identity=("model-a", 0),
+    )
+    try:
+        assert restarted.catalog.match(first[0]) == first[1]
+        assert restarted.catalog.match(second[0]) == second[1]
     finally:
         restarted.close()
 

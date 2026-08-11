@@ -112,9 +112,22 @@ Decode 长时间被 Batch 请求占用，Interactive E2E SLO 全部失败。PALS
 这说明优化目标不是让每个指标同时变小，而是在几乎不损失吞吐的情况下提高关键请求
 的 SLO Goodput。
 
-## 6. Prefix Cache 与 Mooncake Ablation
+## 6. 一键运行重复 Ablation
 
-后续完整矩阵应逐项改变一个变量：
+脚本会在每轮之间停止并重启 Worker、校验实际 Policy/Prefix/Backend，完成后恢复
+PALS + Radix + Mooncake 聊天服务。默认重复 3 轮：
+
+```bash
+cd /mnt/d/nano-vllm-qos
+REPEATS=3 bash scripts/run_gpu_ablation_wsl.sh prefix
+REPEATS=3 bash scripts/run_gpu_ablation_wsl.sh remote
+```
+
+`aggregate_serving_runs` 会拒绝混合模型、硬件、工作负载指纹、Warmup 状态或决策模式不同
+的样本，并输出 Mean、Sample Standard Deviation 与 Student-t 95% CI。原始逐请求 CSV、
+每轮 JSON 以及聚合 Markdown 位于 `benchmarks/results/repeated`。
+
+实验矩阵逐项改变一个变量：
 
 | 组别 | Policy | Prefix | Remote KV | 目的 |
 | --- | --- | --- | --- | --- |
@@ -123,12 +136,59 @@ Decode 长时间被 Batch 请求占用，Interactive E2E SLO 全部失败。PALS
 | C | PALS | Hash | 关闭 | Hash/Radix 对照 |
 | D | PALS | Radix | Mooncake | Remote KV 对照 |
 
-测量远端恢复时使用 `--no-warmup`，先在 D 组写回固定 Prefix，只重启 GPU Worker，再用
-相同 `workload-id` 发起请求。否则本地 Warmup 会先建立 GPU Cache，掩盖 Mooncake Restore。
+测量远端恢复时使用 `--no-warmup`。脚本先在 D 组写回固定 Prefix，只重启 GPU Worker，
+再用相同 `workload-id` 发起请求。Restore Worker 使用
+`--remote-kv-force-restore` 隔离并测量数据路径；正常服务不启用该参数，仍由 Cost-Aware
+Planner 在 Restore 与 Recompute 之间选择。
 
-## 7. 如何形成可信简历结论
+## 7. 三轮实机结果
 
-当前结果证明 Benchmark 链路和调度趋势可复现，但请求数仍少。正式报告应满足：
+所有数值为 `Mean +/- 95% CI Half Width`。
+
+### Hash 与 Radix
+
+| 指标 | Hash | Radix | 均值变化 |
+| --- | ---: | ---: | ---: |
+| Prefix Block Hit Rate | 100% | 100% | 0% |
+| 请求吞吐 | 9.932 +/- 0.882 req/s | 7.439 +/- 4.475 req/s | -25.1% |
+| Batch E2E p95 | 568.404 +/- 23.400 ms | 614.809 +/- 98.495 ms | +8.2% |
+
+两组都正确复用了相同的 24 个 Block。Radix 的方差较大且置信区间与 Hash 重叠，因此这
+3 轮数据只能证明实现语义正确，不能证明某一索引在该短 Prefix、小样本下更快。Radix 的
+工程价值主要是层次化最长前缀匹配、分支共享和后续分层缓存扩展能力。
+
+### Local Recompute 与 Mooncake Restore
+
+| 指标 | Local | Mooncake Forced Restore | 均值变化 |
+| --- | ---: | ---: | ---: |
+| TTFT | 1076.003 +/- 75.359 ms | 2027.055 +/- 284.708 ms | +88.4% |
+| E2E | 1999.753 +/- 291.177 ms | 3007.438 +/- 711.927 ms | +50.4% |
+| 请求吞吐 | 0.494 +/- 0.073 req/s | 0.330 +/- 0.072 req/s | -33.2% |
+| Remote GET | 0 Bytes | 117,441,336 Bytes | 每轮一致 |
+| Restored Token | 0 | 1024 | 每轮一致 |
+| Restore Completed | 0 | 1 | 每轮一致 |
+
+Mooncake 在 3 轮中都完成了跨 Worker KV 恢复，证明 Catalog、GET、CPU Buffer、GPU Import、
+BlockManager 原子提交和 Scheduler 唤醒闭环有效。但 Qwen3-0.6B 的本地 Prefill 较轻，
+而 WSL2 单机 TCP 需要搬运约 112 MiB，所以强制恢复更慢。默认 Cost-Aware Planner 选择
+Recompute 是符合实测结果的；未来 RDMA、多机或更大模型/更长 Prefix 才是 Remote KV
+更可能产生收益的场景。
+
+## 8. 实验中发现并修复的问题
+
+第一次跨 Worker 实验只有约 112 MiB PUT，没有 GET，也没有 Restored Token。排除成本模型
+后定位到 Mooncake Catalog 使用固定对象 Key：KV Page 是内容寻址的不可变对象，可以
+使用 Insert；Catalog 是持续变化的元数据，必须使用 Upsert。旧实现再次 `put` 后，新
+Worker 仍读取旧 Catalog 快照。
+
+修复后为存储接口增加显式 `upsert`，Mooncake 通过 `upsert_batch` 更新 Catalog，同时保留
+KV Page 的普通 `put` 路径。回归测试模拟“put 只插入、upsert 才覆盖”的 Backend；真实 GPU
+实验进一步验证每轮 `remote_restore_started=1`、`remote_restore_completed=1`、
+`kv_restored_tokens=1024`。
+
+## 9. 如何形成可信简历结论
+
+当前结果已经包含 3 轮重复和置信区间，但样本数仍少。后续正式报告应继续满足：
 
 1. 每组至少重复 5 到 10 次，报告均值、标准差或置信区间；
 2. 在低、中、高三个请求到达率下重复；
@@ -136,5 +196,7 @@ Decode 长时间被 Batch 请求占用，Interactive E2E SLO 全部失败。PALS
 4. 同时报告收益与代价，不只选择改善的指标；
 5. 将模拟结果、单机 TCP 结果和未来 RDMA/多机结果明确分开。
 
-在完成多轮实验前，简历可写“构建了可复现的 GPU Ablation 框架，并在单机小样本中
-观察到 PALS 提升交互请求 SLO Goodput”，不要把当前百分比描述成普遍性能保证。
+简历可写“构建可复现的 GPU Ablation 框架，使用工作负载指纹和 Student-t 95% CI 控制
+实验可比性；定位并修复 Mooncake 可变 Catalog 的 Insert/Upsert 语义错误，在 3 轮跨
+Worker 实验中稳定恢复 1024 Token”。同时应明确单机 TCP Restore 在当前工作负载更慢，
+不要把功能闭环包装成不存在的性能提升。

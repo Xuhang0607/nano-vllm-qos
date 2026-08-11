@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import time
 import urllib.error
@@ -193,6 +194,27 @@ def build_workload(
     return sorted(workload, key=lambda item: (item.arrival_ms, item.request_id))
 
 
+def workload_fingerprint(workload):
+    document = [
+        {
+            "request_id": item.request_id,
+            "request_class": item.request_class,
+            "priority": item.priority,
+            "arrival_ms": item.arrival_ms,
+            "messages": item.messages,
+            "max_tokens": item.max_tokens,
+            "ttft_slo_ms": item.ttft_slo_ms,
+            "tpot_slo_ms": item.tpot_slo_ms,
+            "e2e_slo_ms": item.e2e_slo_ms,
+        }
+        for item in workload
+    ]
+    payload = json.dumps(
+        document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
 def request_json(url, payload=None, api_key=None, timeout_s=120.0):
     headers = {"Accept": "application/json"}
     data = None
@@ -346,6 +368,9 @@ def run_live_benchmark(
             "kvcache_block_size": metrics_before.get("kvcache_block_size"),
             "num_kvcache_blocks": metrics_before.get("num_kvcache_blocks"),
             "kv_cache_capacity_tokens": metrics_before.get("kv_cache_capacity_tokens"),
+            "remote_kv_cost_aware": metrics_before.get("remote_kv_cost_aware"),
+            "workload_fingerprint": workload_fingerprint(workload),
+            "warmup_enabled": warmup_prefix is not None,
             "requests": len(workload),
         },
         "overall": summarize_records(records, duration_s),

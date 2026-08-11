@@ -27,6 +27,9 @@ if [[ "${ENABLE_MOONCAKE:-0}" == "1" ]]; then
     --remote-kv-bandwidth-gbps "${REMOTE_KV_BANDWIDTH_GBPS:-100}"
     --remote-kv-fixed-latency-ms "${REMOTE_KV_FIXED_LATENCY_MS:-0.1}"
   )
+  if [[ "${REMOTE_KV_FORCE_RESTORE:-0}" == "1" ]]; then
+    EXTRA_ARGS+=(--remote-kv-force-restore)
+  fi
 fi
 
 cd "$PROJECT_DIR"

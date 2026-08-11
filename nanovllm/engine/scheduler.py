@@ -54,6 +54,7 @@ class Scheduler:
             alpha=config.qos_ewma_alpha,
         )
         self.policy_name = config.scheduling_policy
+        self.remote_kv_cost_aware = getattr(config, "remote_kv_cost_aware", True)
         self.policy = create_policy(self.policy_name, self.estimator, config)
         self.completed_metrics = []
         self.metrics_by_seq_id = {}
@@ -285,6 +286,7 @@ class Scheduler:
             * self.block_size,
             "prefill_ms_per_token_ewma": self.estimator.prefill_ms_per_token,
             "decode_ms_per_token_ewma": self.estimator.decode_ms_per_token,
+            "remote_kv_cost_aware": self.remote_kv_cost_aware,
         })
         result.update(self.block_manager.cache_metrics())
         result.update({

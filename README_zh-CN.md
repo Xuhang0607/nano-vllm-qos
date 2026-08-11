@@ -260,8 +260,14 @@ Radix、`max_num_seqs=1` 和请求到达分布不变，只切换调度策略：
 
 结果说明 PALS 在几乎不改变吞吐的情况下保护交互请求 E2E SLO，但代价是 Batch 和
 Interactive 的首 Token 延迟上升。原始 JSON、CSV 和自动生成的对比表保存在
-[`benchmarks/results`](benchmarks/results)。当前数据属于单机小样本 GPU 测量；简历使用
-具体百分比前仍应进行多轮重复并报告方差。完整方法见
+[`benchmarks/results`](benchmarks/results)。
+
+项目还提供一键重复实验与 Student-t 95% 置信区间聚合。在 RTX 4060 Laptop GPU 上各重复
+3 轮后，Hash/Radix 都达到 100% Block 命中，但吞吐与 E2E 置信区间明显重叠，当前样本
+不能证明 Radix 更快。Mooncake 强制恢复实验则每轮跨 Worker 读取 117,441,336 Bytes，
+恢复 1024 Token；单机 TCP 的 TTFT 为 `2027.1 +/- 284.7 ms`，高于本地重计算的
+`1076.0 +/- 75.4 ms`。这解释了默认 Cost-Aware Planner 在该硬件上选择重计算的原因。
+完整方法、原始结果和适用边界见
 [真实 GPU Serving Benchmark](docs/gpu_serving_benchmark_zh.md)。
 
 ## 安装与原始推理链路
@@ -377,6 +383,7 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 | `scripts/serve_transformers_windows.py` | Windows 原生环境下带明确标识的真实模型兼容入口 |
 | `scripts/run_mooncake_wsl.sh` | Mooncake Master 与常驻 Store Service 启动入口 |
 | `scripts/run_nanovllm_wsl.sh` | Qwen3 CUDA/PALS/Radix/Mooncake 完整服务入口 |
+| `scripts/run_gpu_ablation_wsl.sh` | 重启隔离的 Scheduler/Prefix/Remote KV 多轮 GPU Ablation |
 | `benchmarks/` | 确定性模拟器、真实 GPU Serving 负载生成器与 Ablation 对比工具 |
 | `tests/` | 控制面、竞争条件、Benchmark 与存储适配器测试 |
 | `docs/` | 中文设计文档与论文阅读清单 |
@@ -399,14 +406,15 @@ GPU Worker 后成功加载 Catalog，并从 Mooncake 恢复 2048 个 Token，远
 - [x] WSL2 Qwen3 CUDA + Mooncake TCP 自动写回与跨 Worker 重启恢复
 - [x] 在固定模型、硬件和请求分布下完成 FCFS/PALS GPU 调度对照
 - [x] 输出 TTFT/TPOT/E2E p50/p95/p99、SLO Goodput、Prefix 命中块和 Mooncake 传输字节
+- [x] 完成 Hash/Radix 与 Local/Mooncake 三轮 GPU Ablation，并报告均值、标准差和 95% CI
+- [x] 修复 Mooncake 固定 Catalog Key 使用 Insert 导致跨 Worker 读取旧快照的问题，改为显式 Upsert
 - [ ] 使用独立 CUDA Stream/Event 让 KV 传输与推理计算重叠
 - [ ] 基于 Backend CAS 或事务元数据的多服务实例 Catalog 一致性
 - [ ] Tensor Parallel Shard 恢复与跨 Rank 完成同步
-- [ ] 完成 Hash/Radix 与 Local/Mooncake 多轮 GPU Ablation，并报告方差
 - [ ] 增加重计算 Token、显存峰值和多到达率压力曲线
 
-当前已有统一硬件上的单机小样本 GPU 对照；完成多轮重复和方差报告前，简历应描述观察到的
-趋势和实验框架，不应把单轮百分比表述为普遍性能保证。
+当前已有统一硬件上的三轮单机 GPU 对照。由于样本量仍小且 Mooncake 使用 WSL2 单机 TCP，
+简历应同时描述均值、置信区间和实验边界，不应把该百分比表述为 RDMA 或多机性能保证。
 
 ## 为什么这是二次开发而不是简单复现
 

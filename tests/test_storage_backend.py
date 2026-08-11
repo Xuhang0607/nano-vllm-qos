@@ -54,8 +54,9 @@ class FakeMooncakeStore:
 
 def exercise_backend(backend):
     backend.put("page", b"kv-data")
+    backend.upsert("page", b"updated-kv-data")
     assert backend.exists("page")
-    assert backend.get("page") == b"kv-data"
+    assert backend.get("page") == b"updated-kv-data"
     backend.remove("page")
     assert not backend.exists("page")
     backend.put_many({"page-a": b"a", "page-b": b"b"})

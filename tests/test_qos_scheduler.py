@@ -292,6 +292,7 @@ def test_scheduler_uses_radix_prefix_cache_end_to_end():
     assert metrics["kvcache_block_size"] == 2
     assert metrics["num_kvcache_blocks"] == 16
     assert metrics["kv_cache_capacity_tokens"] == 32
+    assert metrics["remote_kv_cost_aware"] is True
 
 
 def test_cancel_waiting_request_removes_it_from_scheduler():
