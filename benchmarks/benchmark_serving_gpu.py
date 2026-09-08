@@ -6,13 +6,15 @@ import argparse
 import csv
 import hashlib
 import json
+import math
+import random
 import subprocess
 import threading
 import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from itertools import pairwise
 from pathlib import Path
@@ -21,6 +23,9 @@ from statistics import median
 LATENCY_FIELDS = ("queue_ms", "ttft_ms", "tpot_ms", "e2e_ms")
 SLO_FIELDS = ("ttft_slo_met", "tpot_slo_met", "e2e_slo_met")
 COUNTER_FIELDS = (
+    "kv_admission_deferred_checks",
+    "metrics_summary_calls",
+    "metrics_summary_refreshes",
     "prefix_cache_lookups",
     "prefix_cache_queried_blocks",
     "prefix_cache_hit_blocks",
@@ -244,6 +249,7 @@ def _latency_summary(records, field: str):
         if record.get("success") and record.get("metrics", {}).get(field) is not None
     ]
     return {
+        "samples": len(values),
         "p50": median(values) if values else 0.0,
         "p95": percentile(values, 0.95),
         "p99": percentile(values, 0.99),
@@ -282,9 +288,21 @@ def summarize_records(records, duration_s: float):
         "slo_evaluated_requests": len(evaluated),
         "slo_met_requests": slo_met,
         "slo_attainment": slo_met / len(evaluated) if evaluated else None,
+        "offered_slo_attainment": slo_met / len(records) if evaluated else None,
         "slo_goodput_rps": slo_met / duration_s,
         "latency_ms": {
             field: _latency_summary(completed, field) for field in LATENCY_FIELDS
+        },
+        "client_latency_ms": {
+            field: {
+                "samples": len(values),
+                "p50": percentile(values, 0.5),
+                "p95": percentile(values, 0.95),
+                "p99": percentile(values, 0.99),
+                "max": max(values, default=0.0),
+            }
+            for field in ("client_e2e_ms", "dispatch_lag_ms", "scheduled_e2e_ms")
+            for values in [[record[field] for record in completed if field in record]]
         },
     }
 
@@ -294,6 +312,10 @@ def metric_deltas(before, after):
         field: max(0, int(after.get(field, 0)) - int(before.get(field, 0)))
         for field in COUNTER_FIELDS
     }
+    deltas["metrics_summary_compute_ms"] = max(
+        0.0, float(after.get("metrics_summary_compute_ms", 0.0))
+        - float(before.get("metrics_summary_compute_ms", 0.0)),
+    )
     queried = deltas["prefix_cache_queried_blocks"]
     deltas["prefix_cache_block_hit_rate"] = (
         deltas["prefix_cache_hit_blocks"] / queried if queried else 0.0
@@ -396,6 +418,25 @@ def workload_fingerprint(workload):
     return hashlib.sha256(payload).hexdigest()[:16]
 
 
+def schedule_sustained(workload, arrival_rate_rps: float, seed: int = 42,
+                       arrival_process: str = "poisson"):
+    if not math.isfinite(arrival_rate_rps) or arrival_rate_rps <= 0:
+        raise ValueError("arrival rate must be finite and positive")
+    if arrival_process not in ("poisson", "uniform"):
+        raise ValueError("unknown arrival process")
+    rng = random.Random(seed)
+    items = list(workload)
+    rng.shuffle(items)
+    arrival_ms = 0.0
+    scheduled = []
+    for item in items:
+        interval = (rng.expovariate(arrival_rate_rps) if arrival_process == "poisson"
+                    else 1.0 / arrival_rate_rps)
+        arrival_ms += interval * 1000.0
+        scheduled.append(replace(item, arrival_ms=arrival_ms))
+    return scheduled
+
+
 def describe_workload(workload, label: str | None = None):
     classes = {}
     for item in workload:
@@ -469,6 +510,7 @@ def _run_request(base_url, model, spec, start_time, api_key, timeout_s):
     target = start_time + spec.arrival_ms / 1000.0
     time.sleep(max(0.0, target - time.perf_counter()))
     request_started = time.perf_counter()
+    dispatch_lag_ms = max(0.0, (request_started - target) * 1000.0)
     try:
         response = request_json(
             f"{base_url}/v1/chat/completions",
@@ -483,6 +525,8 @@ def _run_request(base_url, model, spec, start_time, api_key, timeout_s):
             "arrival_ms": spec.arrival_ms,
             "success": True,
             "client_e2e_ms": (time.perf_counter() - request_started) * 1000.0,
+            "dispatch_lag_ms": dispatch_lag_ms,
+            "scheduled_e2e_ms": (time.perf_counter() - target) * 1000.0,
             "usage": response.get("usage", {}),
             "metrics": response.get("x_nanovllm_metrics", {}),
             "finish_reason": response.get("choices", [{}])[0].get("finish_reason"),
@@ -495,10 +539,66 @@ def _run_request(base_url, model, spec, start_time, api_key, timeout_s):
             "arrival_ms": spec.arrival_ms,
             "success": False,
             "client_e2e_ms": (time.perf_counter() - request_started) * 1000.0,
+            "dispatch_lag_ms": dispatch_lag_ms,
+            "scheduled_e2e_ms": (time.perf_counter() - target) * 1000.0,
             "error": f"{type(exc).__name__}: {exc}",
             "usage": {},
             "metrics": {},
         }
+
+
+def dispatch_workload(base_url, model, workload, started, api_key, timeout_s,
+                      max_inflight=128):
+    """Open-loop arrivals: reject locally on saturation, never hide a client queue."""
+    if max_inflight < 1:
+        raise ValueError("max_inflight must be positive")
+    slots = threading.BoundedSemaphore(max_inflight)
+
+    def run(spec):
+        try:
+            return _run_request(base_url, model, spec, started, api_key, timeout_s)
+        finally:
+            slots.release()
+
+    records = []
+    with ThreadPoolExecutor(max_workers=max_inflight) as executor:
+        futures = []
+        for spec in sorted(workload, key=lambda item: item.arrival_ms):
+            target = started + spec.arrival_ms / 1000.0
+            time.sleep(max(0.0, target - time.perf_counter()))
+            if slots.acquire(blocking=False):
+                futures.append(executor.submit(run, spec))
+            else:
+                records.append({
+                    "request_id": spec.request_id,
+                    "request_class": spec.request_class,
+                    "priority": spec.priority,
+                    "arrival_ms": spec.arrival_ms,
+                    "success": False,
+                    "client_rejected": True,
+                    "error": "load generator max_inflight exceeded",
+                    "usage": {}, "metrics": {},
+                })
+        records.extend(future.result() for future in as_completed(futures))
+    return records
+
+
+def evidence_warnings(records, duration_s):
+    warnings = []
+    if duration_s < 300:
+        warnings.append("Measurement lasted less than 300 seconds; not a sustained-load result.")
+    for name in sorted({item["request_class"] for item in records}):
+        count = sum(item.get("success", False) and item["request_class"] == name
+                    for item in records)
+        if count < 200:
+            warnings.append(f"{name}: only {count} completions; tail percentiles are exploratory.")
+        elif count < 1000:
+            warnings.append(f"{name}: {count} completions; P99 still has limited tail samples.")
+    if any(item.get("client_rejected") for item in records):
+        warnings.append("Load generator saturated; rejected arrivals remain in the denominator.")
+    if any(item.get("dispatch_lag_ms", 0) > 100 for item in records):
+        warnings.append("Some arrivals were dispatched over 100 ms late; inspect client timing.")
+    return warnings
 
 
 def run_live_benchmark(
@@ -513,6 +613,7 @@ def run_live_benchmark(
     gpu_sampling_interval_ms: int | None = None,
     gpu_index: int = 0,
     workload_parameters: dict | None = None,
+    max_inflight: int = 128,
 ):
     base_url = base_url.rstrip("/")
     health = request_json(f"{base_url}/health", api_key=api_key, timeout_s=timeout_s)
@@ -543,26 +644,13 @@ def run_live_benchmark(
         gpu_sampler = NvidiaSmiSampler(gpu_sampling_interval_ms, gpu_index)
         gpu_sampler.start()
     started = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=max(1, len(workload))) as executor:
-        futures = [
-            executor.submit(
-                _run_request,
-                base_url,
-                model,
-                spec,
-                started,
-                api_key,
-                timeout_s,
-            )
-            for spec in workload
-        ]
-        records = [future.result() for future in as_completed(futures)]
-    duration_s = time.perf_counter() - started
-    gpu_metrics = (
-        gpu_sampler.stop()
-        if gpu_sampler is not None
-        else summarize_gpu_samples([], "sampling disabled")
-    )
+    try:
+        records = dispatch_workload(base_url, model, workload, started, api_key,
+                                    timeout_s, max_inflight)
+        duration_s = time.perf_counter() - started
+    finally:
+        gpu_metrics = (gpu_sampler.stop() if gpu_sampler is not None
+                       else summarize_gpu_samples([], "sampling disabled"))
     records.sort(key=lambda item: item["request_id"])
     metrics_after = wait_for_idle(base_url, api_key, timeout_s)
     classes = sorted({record["request_class"] for record in records})
@@ -577,10 +665,15 @@ def run_live_benchmark(
             "backend": health.get("backend"),
             "hardware": hardware,
             "policy": metrics_before.get("policy"),
+            "metrics_summary_mode": metrics_before.get("metrics_summary_mode"),
+            "device_context_mode": metrics_before.get("device_context_mode"),
+            "scheduler_trace_enabled": metrics_before.get("scheduler_trace_enabled", False),
             "prefix_cache_backend": metrics_before.get("prefix_cache_backend"),
             "max_model_len": metrics_before.get("max_model_len"),
             "requested_max_model_len": metrics_before.get("requested_max_model_len"),
             "max_num_seqs": metrics_before.get("max_num_seqs"),
+            "max_num_active_seqs": metrics_before.get("max_num_active_seqs"),
+            "kv_admission_lookahead": metrics_before.get("kv_admission_lookahead", 0),
             "max_num_batched_tokens": metrics_before.get("max_num_batched_tokens"),
             "kvcache_block_size": metrics_before.get("kvcache_block_size"),
             "num_kvcache_blocks": metrics_before.get("num_kvcache_blocks"),
@@ -615,6 +708,8 @@ def run_live_benchmark(
             "warmup_enabled": warmup_prefix is not None,
             "gpu_sampling_interval_ms": gpu_sampling_interval_ms,
             "requests": len(workload),
+            "client_max_inflight": max_inflight,
+            "arrival_span_s": max((item.arrival_ms for item in workload), default=0) / 1000,
             "workload_parameters": workload_parameters or {},
         },
         "overall": summarize_records(records, duration_s),
@@ -630,6 +725,7 @@ def run_live_benchmark(
         "metrics_before": metrics_before,
         "metrics_after": metrics_after,
         "requests": records,
+        "evidence_warnings": evidence_warnings(records, duration_s),
     }
 
 
@@ -647,6 +743,9 @@ def write_results(results, output_json: Path, output_csv: Path | None = None):
         "arrival_ms",
         "success",
         "client_e2e_ms",
+        "dispatch_lag_ms",
+        "scheduled_e2e_ms",
+        "client_rejected",
         "prompt_tokens",
         "completion_tokens",
         *LATENCY_FIELDS,
@@ -676,6 +775,8 @@ def write_results(results, output_json: Path, output_csv: Path | None = None):
 def print_report(results):
     metadata = results["metadata"]
     print("nano-vLLM live serving benchmark")
+    for warning in results.get("evidence_warnings", []):
+        print(f"EVIDENCE: {warning}")
     print(
         f"backend={metadata['backend']} model={metadata['model']} "
         f"policy={metadata['policy']} prefix={metadata['prefix_cache_backend']}"
@@ -744,6 +845,10 @@ def main():
     parser.add_argument("--hardware")
     parser.add_argument("--workload-id", default="gpu-ablation-v1")
     parser.add_argument("--workload-label")
+    parser.add_argument("--arrival-rate-rps", type=float)
+    parser.add_argument("--arrival-process", choices=("poisson", "uniform"), default="poisson")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--max-inflight", type=int, default=128)
     parser.add_argument("--batch-requests", type=int, default=4)
     parser.add_argument("--interactive-requests", type=int, default=4)
     parser.add_argument("--shared-prefix-repeats", type=int, default=32)
@@ -782,6 +887,8 @@ def main():
         parser.error("interactive-unique-repeats must not be negative")
     if args.gpu_sampling_interval_ms <= 0 or args.gpu_index < 0:
         parser.error("GPU sampling interval must be positive and index non-negative")
+    if args.max_inflight < 1:
+        parser.error("max-inflight must be positive")
 
     workload = build_workload(
         args.batch_requests,
@@ -795,6 +902,9 @@ def main():
         args.interactive_unique_repeats,
     )
     shared_prefix = build_shared_prefix(args.workload_id, args.shared_prefix_repeats)
+    if args.arrival_rate_rps is not None:
+        workload = schedule_sustained(workload, args.arrival_rate_rps, args.seed,
+                                      args.arrival_process)
     results = run_live_benchmark(
         args.base_url,
         args.model,
@@ -815,7 +925,11 @@ def main():
             "interactive_delay_ms": args.interactive_delay_ms,
             "batch_output_tokens": args.batch_output_tokens,
             "interactive_output_tokens": args.interactive_output_tokens,
+            "arrival_rate_rps": args.arrival_rate_rps,
+            "arrival_process": args.arrival_process,
+            "seed": args.seed,
         },
+        max_inflight=args.max_inflight,
     )
     print_report(results)
     output_csv = write_results(results, args.output_json, args.output_csv)

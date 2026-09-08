@@ -1,0 +1,32 @@
+{
+  "suite": "quality",
+  "model_path": "/mnt/d/models/Qwen3-0.6B",
+  "port": 8031,
+  "output_dir": "benchmarks/results/validation-20260905-quality",
+  "kv_blocks": 64,
+  "max_num_seqs": 8,
+  "quality_repeats": 6,
+  "lengths": [
+    48,
+    96,
+    144
+  ],
+  "seed": 20260905,
+  "requests": 500,
+  "duration": 300,
+  "rates": [
+    0.5,
+    1,
+    2
+  ],
+  "arrival_process": "poisson",
+  "repeats": 3,
+  "batch_output_tokens": 128,
+  "interactive_output_tokens": 64,
+  "max_inflight": 128,
+  "timeout": 300,
+  "startup_timeout": 240,
+  "base_url": "http://127.0.0.1:8031",
+  "git_commit": "50b952773cb61392c17229d80a468d7c695740f7",
+  "git_diff_stat": " README.md                                          |    5 +\n README_zh-CN.md                                    |    5 +\n benchmarks/aggregate_serving_runs.py               |    2 +\n benchmarks/benchmark_kv_quality.py                 |   89 +-\n benchmarks/benchmark_serving_gpu.py                |  129 +-\n benchmarks/compare_kv_quality.py                   |   27 +-\n benchmarks/results/qos_simulation.json             | 2380 ++++++++++----------\n .../repeated/compression-none-1.requests.csv       |   18 +-\n .../repeated/compression-none-2.requests.csv       |   18 +-\n .../repeated/compression-none-3.requests.csv       |   18 +-\n .../repeated/compression-query-1.requests.csv      |   18 +-\n .../repeated/compression-query-2.requests.csv      |   18 +-\n .../repeated/compression-query-3.requests.csv      |   18 +-\n .../results/repeated/kv-recompute-1.requests.csv   |   18 +-\n .../results/repeated/kv-recompute-2.requests.csv   |   18 +-\n .../results/repeated/kv-recompute-3.requests.csv   |   18 +-\n .../results/repeated/kv-slo-aware-1.requests.csv   |   18 +-\n .../results/repeated/kv-slo-aware-2.requests.csv   |   18 +-\n .../results/repeated/kv-slo-aware-3.requests.csv   |   18 +-\n .../results/repeated/prefix-hash-1.requests.csv    |   14 +-\n .../results/repeated/prefix-hash-2.requests.csv    |   14 +-\n .../results/repeated/prefix-hash-3.requests.csv    |   14 +-\n .../results/repeated/prefix-hash-vs-radix.json     | 1082 ++++-----\n .../results/repeated/prefix-hash-vs-radix.md       |   60 +-\n .../results/repeated/prefix-radix-1.requests.csv   |   14 +-\n .../results/repeated/prefix-radix-2.requests.csv   |   14 +-\n .../results/repeated/prefix-radix-3.requests.csv   |   14 +-\n .../repeated/pressure-high-fcfs-1.requests.csv     |   26 +-\n .../repeated/pressure-high-fcfs-2.requests.csv     |   26 +-\n .../repeated/pressure-high-fcfs-3.requests.csv     |   26 +-\n .../repeated/pressure-high-pals-1.requests.csv     |   26 +-\n .../repeated/pressure-high-pals-2.requests.csv     |   26 +-\n .../repeated/pressure-high-pals-3.requests.csv     |   26 +-\n .../repeated/pressure-low-fcfs-1.requests.csv      |   26 +-\n .../repeated/pressure-low-fcfs-2.requests.csv      |   26 +-\n .../repeated/pressure-low-fcfs-3.requests.csv      |   26 +-\n .../repeated/pressure-low-pals-1.requests.csv      |   26 +-\n .../repeated/pressure-low-pals-2.requests.csv      |   26 +-\n .../repeated/pressure-low-pals-3.requests.csv      |   26 +-\n .../repeated/pressure-medium-fcfs-1.requests.csv   |   26 +-\n .../repeated/pressure-medium-fcfs-2.requests.csv   |   26 +-\n .../repeated/pressure-medium-fcfs-3.requests.csv   |   26 +-\n .../repeated/pressure-medium-pals-1.requests.csv   |   26 +-\n .../repeated/pressure-medium-pals-2.requests.csv   |   26 +-\n .../repeated/pressure-medium-pals-3.requests.csv   |   26 +-\n .../results/repeated/remote-local-1.requests.csv   |    4 +-\n .../results/repeated/remote-local-2.requests.csv   |    4 +-\n .../results/repeated/remote-local-3.requests.csv   |    4 +-\n .../repeated/remote-mooncake-1.requests.csv        |    4 +-\n .../repeated/remote-mooncake-2.requests.csv        |    4 +-\n .../repeated/remote-mooncake-3.requests.csv        |    4 +-\n .../serving_gpu_fcfs_radix_local_scheduler.json    | 1056 ++++-----\n ...ing_gpu_fcfs_radix_local_scheduler.requests.csv |   18 +-\n .../serving_gpu_pals_radix_local_scheduler.json    | 1056 ++++-----\n ...ing_gpu_pals_radix_local_scheduler.requests.csv |   18 +-\n .../serving_gpu_pals_radix_mooncake_smoke.json     | 1110 ++++-----\n ...ving_gpu_pals_radix_mooncake_smoke.requests.csv |   18 +-\n .../results/serving_gpu_scheduler_comparison.json  |  180 +-\n .../results/serving_gpu_scheduler_comparison.md    |   42 +-\n benchmarks/results/tiered_cache_simulation.json    |   90 +-\n nanovllm/engine/block_manager.py                   |    6 +-\n tests/test_kv_compression.py                       |   10 +\n tests/test_kv_quality_benchmark.py                 |   14 +\n tests/test_kv_quality_comparison.py                |   15 +\n tests/test_serving_gpu_benchmark.py                |   45 +\n 65 files changed, 4268 insertions(+), 3981 deletions(-)\n"
+}

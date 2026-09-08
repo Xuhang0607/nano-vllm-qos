@@ -173,6 +173,7 @@ def create_app(
                 e2e_slo_ms=payload.e2e_slo_ms,
                 request_class=payload.request_class,
             ),
+            stream=payload.stream,
         )
 
     @app.post("/v1/chat/completions")
@@ -199,7 +200,7 @@ def create_app(
                         }
                     )
                     while True:
-                        event = await asyncio.to_thread(handle.events.get)
+                        event = await handle.events.get_async()
                         if isinstance(event, TextDelta):
                             yield _sse(
                                 {
@@ -273,7 +274,10 @@ def create_app(
                 if await request.is_disconnected():
                     handle.cancel()
                     raise HTTPException(499, _error("Client disconnected"))
-                event = await asyncio.to_thread(handle.events.get)
+                try:
+                    event = await asyncio.wait_for(handle.events.get_async(), timeout=0.25)
+                except asyncio.TimeoutError:
+                    continue
                 if isinstance(event, GenerationFinished):
                     completed = True
                     return JSONResponse(

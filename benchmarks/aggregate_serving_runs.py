@@ -41,6 +41,12 @@ T_CRITICAL_95 = {
     30: 2.042,
 }
 CONFIG_FIELDS = (
+    "device_context_mode",
+    "kv_admission_lookahead",
+    "max_num_active_seqs",
+    "scheduler_trace_enabled",
+    "metrics_summary_mode",
+    "client_max_inflight",
     "model",
     "backend",
     "hardware",
@@ -68,6 +74,7 @@ CONFIG_FIELDS = (
     "workload_parameters",
 )
 CROSS_GROUP_FIELDS = (
+    "client_max_inflight",
     "model",
     "hardware",
     "max_num_seqs",
@@ -111,6 +118,10 @@ def summarize_values(values):
 def _run_metrics(run):
     request_metrics = [item.get("metrics", {}) for item in run.get("requests", [])]
     metrics = {
+        "observability.summary_calls": run["metric_deltas"].get("metrics_summary_calls", 0),
+        "observability.summary_refreshes": run["metric_deltas"].get("metrics_summary_refreshes", 0),
+        "observability.summary_compute_ms": run["metric_deltas"].get("metrics_summary_compute_ms", 0),
+        "overall.failed_requests": run["overall"].get("failed_requests", 0),
         "overall.request_throughput_rps": run["overall"]["request_throughput_rps"],
         "overall.output_throughput_tokens_per_s": run["overall"][
             "output_throughput_tokens_per_s"
@@ -163,6 +174,12 @@ def _run_metrics(run):
         ),
     }
     for class_name, summary in run["by_class"].items():
+        metrics[f"{class_name}.failed_requests"] = summary.get("failed_requests", 0)
+        if summary.get("offered_slo_attainment") is not None:
+            metrics[f"{class_name}.offered_slo_attainment"] = summary["offered_slo_attainment"]
+        for field, values in summary.get("client_latency_ms", {}).items():
+            if values["samples"]:
+                metrics[f"{class_name}.{field}_p95"] = values["p95"]
         for latency in ("ttft_ms", "tpot_ms", "e2e_ms"):
             for percentile in ("p50", "p95", "p99"):
                 metrics[f"{class_name}.{latency}_{percentile}"] = summary["latency_ms"][
@@ -211,6 +228,7 @@ def aggregate_runs(runs, name: str):
     return {
         "name": name,
         "runs": len(runs),
+        "evidence_warnings": sorted({warning for run in runs for warning in run.get("evidence_warnings", [])}),
         "configuration": {
             field: runs[0]["metadata"].get(field) for field in CONFIG_FIELDS
         },
@@ -221,13 +239,29 @@ def aggregate_runs(runs, name: str):
     }
 
 
-def compare_groups(baseline, candidate):
+def compare_groups(baseline, candidate, *, allow_metrics_mode_change=False,
+                   allow_admission_change=False, allow_device_context_change=False):
     mismatches = [
         field
         for field in CROSS_GROUP_FIELDS
         if baseline["configuration"].get(field)
         != candidate["configuration"].get(field)
     ]
+    if (not allow_device_context_change
+            and baseline["configuration"].get("device_context_mode")
+            != candidate["configuration"].get("device_context_mode")):
+        mismatches.append("device_context_mode")
+    if (baseline["configuration"].get("scheduler_trace_enabled")
+            != candidate["configuration"].get("scheduler_trace_enabled")):
+        mismatches.append("scheduler_trace_enabled")
+    if (not allow_admission_change
+            and baseline["configuration"].get("kv_admission_lookahead")
+            != candidate["configuration"].get("kv_admission_lookahead")):
+        mismatches.append("kv_admission_lookahead")
+    if (not allow_metrics_mode_change
+            and baseline["configuration"].get("metrics_summary_mode")
+            != candidate["configuration"].get("metrics_summary_mode")):
+        mismatches.append("metrics_summary_mode")
     if mismatches:
         raise ValueError(
             "comparison groups use different workloads: " + ", ".join(mismatches)
@@ -277,6 +311,12 @@ def render_markdown(comparison):
             f"| {field} | {_format_ci(before)} | {_format_ci(after)} | {change_text} |"
         )
     lines.append("")
+    warnings = sorted(set(baseline.get("evidence_warnings", []))
+                      | set(candidate.get("evidence_warnings", [])))
+    if min(baseline["runs"], candidate["runs"]) < 3:
+        warnings.append("Fewer than three repetitions: preliminary result only.")
+    if warnings:
+        lines.extend(["## Evidence Limits", ""] + [f"- {warning}" for warning in warnings] + [""])
     return "\n".join(lines)
 
 

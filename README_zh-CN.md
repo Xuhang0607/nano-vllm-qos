@@ -13,6 +13,29 @@
 
 # Nano-vLLM QoS Lab
 
+> 评测更新：历史 +70.2% 输出吞吐结果每轮仅 8 个请求，属于探索性实验。
+> 新版加入相同保留页预算、每策略 216 题合成检索，以及持续到达压测。
+> 执行方法与结论边界见[扩大评测协议](docs/validation_protocol_zh.md)。
+> [独立样本验证](docs/final_validation_zh.md)已扩大到每策略 432 题：相同 5 页预算下，
+> Query-Aware 准确率 70.6%，固定窗口 27.1%，不压缩 74.1%。累计丢弃 58.3% KV Token
+> 不等于 GPU 峰值显存下降 58.3%；性能结论与失败请求另行记录。
+> 12 轮持续压测共发出 9012 请求，成功 8797、超时 215，尚不能证明稳定吞吐收益。
+> 最新[18 轮五分钟设备上下文消融](docs/device_context_sustained_zh.md)共发出 10,818 请求，
+> 10,817 成功，基线有 1 次连接超时。3 rps 下输出吞吐均值增加 25.3%，但两种模式均积压；
+> scoped 交互 SLO 达标率均值为 52.6%，不代表稳定承载 3 rps，完整区间和失败样本均保留。
+> 当前 WSL 全量回归测试 213 项通过。另完成[指标热路径对照](docs/metrics_summary_optimization_zh.md)：
+> 各模式三轮、共 3606 请求全部成功，历史汇总耗时下降 92.6%，但未证实端到端吞吐收益。
+> 新增[KV 抢占追踪与驻留准入上限](docs/kv_preemption_diagnosis_zh.md)，区分每步批次大小与
+> KV 驻留请求数。准入上限仍为默认关闭的实验选项，带追踪的诊断数据不能用于宣称加速。
+> 单轮诊断中，驻留上限 8 消除了回收，但交互延迟恶化；保留该负面结果，不作为优化收益宣传。
+> 后续[优先级页预算实验](docs/kv_page_admission_zh.md)同样默认关闭：六轮压力测试减少了重算，
+> 但尾延迟与吞吐均值恶化。另补齐部分 Prefill 与自我抢占后的进度保障，并通过 GPU 冒烟验证。
+> [执行阶段诊断](docs/engine_phase_profile_zh.md)进一步定位到残留的全局默认设备分派上下文，
+> 已改为初始化期间限定 CUDA 作用域、退出恢复调用者状态，并显式指定 pinned 输入位于 CPU。
+> 本机 Nsight 仅采集到 API/NVTX 数据，没有 GPU Kernel 事件，不据此宣称 GPU 利用率或算子耗时占比。
+> 随后完成[设备上下文短时在线消融](docs/device_context_online_zh.md)：六轮交替对照，1086 请求全部成功，
+> 输出吞吐均值提升 21.1%。该结果限定于单档负载、每轮 60 秒到达窗口，不代表持续容量或上游对比加速。
+
 本仓库是基于
 [GeeeekExplorer/nano-vllm](https://github.com/GeeeekExplorer/nano-vllm)
 进行的推理引擎二次开发项目。项目保留 nano-vLLM 简洁的推理链路，重点探索一个
@@ -80,7 +103,7 @@ TP=1 的远端恢复路径已经从 Prefix Lookup 接到 GPU Page Import 与 Sch
 | 模块 | 实现内容 | 当前状态 |
 | --- | --- | --- |
 | SLO 感知调度 | 请求优先级、TTFT/TPOT/E2E 目标、EWMA 执行时间估计、紧迫度排序、老化与抢占对象选择 | 已接入推理调度器 |
-| 请求可观测性 | Queue、TTFT、TPOT、E2E、抢占次数与 SLO 达成率 | 已接入 |
+| 请求可观测性 | Queue、TTFT、TPOT、E2E、抢占与 SLO；缓存不变的历史摘要，实时刷新队列和 KV 状态 | 已接入 |
 | SLO-Aware KV 回收 | 按请求紧迫度保留连续前缀、释放后缀、Radix 后缀重挂接与无进展全量回收兜底 | 无损路径，已完成实机对照 |
 | Query-Aware KV 压缩 | 保留 Attention Sink、与尾部 Query 稀有 Token 重合的历史页和 Recent Window；逻辑/物理长度解耦 | 近似路径，已完成实机性能与质量探针 |
 | Radix 前缀缓存 | Longest Prefix Match、边分裂、并发插入规范化、引用管理、Page 对齐与 LRU 叶节点驱逐 | 已接入 BlockManager |
@@ -283,7 +306,10 @@ python -m scripts.kv_page_roundtrip --device cuda --dtype bfloat16
 原始结果保存在 [`benchmarks/results`](benchmarks/results)。两个 Benchmark 都使用固定
 工作负载，因此可以在 CI 中检测调度与缓存策略回归。
 
-### 真实 RTX 4060 Serving 实验
+### 历史 RTX 4060 Serving 探索实验
+
+本节保留早期短轨迹实验，不能作为持续负载容量或通用性能结论。新版公平质量预算与
+持续压测见[独立样本与重复实机验证](docs/final_validation_zh.md)。
 
 `benchmark_serving_gpu` 直接向运行中的 OpenAI API 发送固定混合负载，使用引擎内部
 指标汇总 TTFT/TPOT/E2E p50/p95/p99、SLO Goodput、Prefix Cache 命中块以及
@@ -310,7 +336,8 @@ Interactive 的首 Token 延迟上升。原始 JSON、CSV 和自动生成的对�
 完整方法、原始结果和适用边界见
 [真实 GPU Serving Benchmark](docs/gpu_serving_benchmark_zh.md)。
 
-同一套框架还完成了 KV 压力策略对照。下表均为固定请求轨迹下 3 轮 RTX 4060 实机均值：
+同一套框架还完成了 KV 压力策略对照。下表为每轮仅 8 个请求、3 轮 RTX 4060 实机均值：
+即使重复三轮，该样本量也不足以支持稳定尾延迟和通用加速结论。
 
 | 实验 | 主要收益 | 代价与边界 |
 | --- | --- | --- |
@@ -319,15 +346,15 @@ Interactive 的首 Token 延迟上升。原始 JSON、CSV 和自动生成的对�
 
 质量实验在 Needle-in-a-Haystack 任务的前、中、后三种证据位置上各重复 3 次。关闭思考并
 只校验 `</think>` 后的最终答案，`query_aware` 在累计 KV Token 丢弃比例 40.5% 时通过
-9/9；仅保留开头和最近窗口的 `sink_recent` 在 67.6% 丢弃比例下通过 0/9。这个小规模定向测试证明 Query 相关性
-筛选优于固定窗口，但不代表 LongBench 或真实业务质量完全无损。
+9/9；仅保留开头和最近窗口的 `sink_recent` 在 67.6% 丢弃比例下通过 0/9。该对照的
+保留预算不同，不能单独证明选页策略更好；已由每策略 432 题、相同 5 页预算的新版实验补充。
 
-### 多到达率 PALS 压力曲线
+### 历史多到达率 PALS 短轨迹
 
 在 `2/5/20 req/s` 三档交互请求到达率下，FCFS/PALS 各重复 3 轮。PALS 将 Interactive
 E2E p95 分别降低 96.5%、91.2% 和 87.9%，三档 SLO 达成率均从 0% 提升到 100%；
-总请求吞吐变化不超过 3.5%，GPU 平均利用率和峰值显存基本一致。结果说明收益来自调度
-决策，而不是额外占用硬件资源。
+总请求吞吐变化不超过 3.5%，GPU 平均利用率和峰值显存基本一致。这些结果仅描述该短轨迹
+下的观察值，不证明能持续承载 20 req/s，也不证明任意 SLO 都能达到 100%。
 
 ![PALS 多到达率 GPU 压力曲线](assets/pals-pressure.svg)
 
@@ -406,6 +433,11 @@ Batching、Paged KV、Radix Prefix Cache、Remote KV 或 PALS。前端会明确�
 详细说明见 [Windows 本地运行 Qwen3](docs/windows_qwen3_zh.md)。
 
 ## WSL2 CUDA + Mooncake 完整链路
+
+Windows 下可直接双击项目根目录的 `start_nanovllm_qos.cmd`。它会检查并启动
+Mooncake Master、Mooncake Store Service 和 nano-vLLM GPU Worker，并自动打开
+`http://127.0.0.1:8020/`。参数说明见
+[一键启动 nano-vLLM QoS 服务](docs/one_click_start_zh.md)。
 
 可复现部署由三个进程组成：Mooncake Master、持有常驻远端内存段的 Store Service，
 以及 nano-vLLM GPU Worker。请在三个 WSL 终端中分别运行：

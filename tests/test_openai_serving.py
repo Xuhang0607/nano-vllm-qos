@@ -66,6 +66,15 @@ def test_non_streaming_chat_completion_matches_openai_shape():
     assert payload["x_nanovllm_metrics"]["ttft_ms"] >= 0
 
 
+def test_non_streaming_wait_survives_periodic_disconnect_check_timeout():
+    app = create_app(lambda: MockEngine(step_delay_s=0.02),
+                     served_model="nano-test", backend_name="test backend")
+    with TestClient(app) as client:
+        response = client.post("/v1/chat/completions", json=request_body(max_tokens=20))
+    assert response.status_code == 200
+    assert response.json()["usage"]["completion_tokens"] == 20
+
+
 def test_streaming_chat_completion_emits_role_text_finish_usage_and_done():
     with make_client() as client:
         with client.stream(

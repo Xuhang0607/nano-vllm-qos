@@ -147,3 +147,13 @@ def test_scheduler_dispatches_query_aware_compression_policy():
     assert freed >= 2
     assert sequence.kv_compressed is True
     assert scheduler.metrics()["kv_compression_events"] == 1
+
+
+def test_query_aware_fills_budget_with_recent_history_when_scores_are_zero():
+    Sequence.block_size = 4
+    manager = BlockManager(8, 4, "radix")
+    sequence = make_long_sequence()
+    allocate_cached(manager, sequence)
+    manager.compress_query_aware(sequence, 1, 2, 1, 4)
+    assert len(sequence.block_table) == 4
+    assert sequence.kv_block_logical_indices == [0, 3, 4, 5]

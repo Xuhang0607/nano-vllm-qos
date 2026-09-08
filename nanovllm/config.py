@@ -19,6 +19,8 @@ class Config:
     model: str
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
+    max_num_active_seqs: int | None = None
+    kv_admission_lookahead: int = 0
     max_model_len: int = 40960
     requested_max_model_len: int = field(init=False)
     gpu_memory_utilization: float = 0.9
@@ -31,6 +33,8 @@ class Config:
     num_kvcache_blocks_override: int | None = None
     prefix_cache_backend: str = "hash"
     scheduling_policy: str = "fcfs"
+    metrics_summary_mode: str = "cached"
+    scheduler_trace_path: str | None = None
     qos_best_effort_slo_ms: float = 60000.0
     qos_priority_boost_ms: float = 50.0
     qos_aging_ms_per_step: float = 1.0
@@ -63,6 +67,8 @@ class Config:
         from transformers import AutoConfig
 
         assert os.path.isdir(self.model)
+        assert self.max_num_active_seqs is None or self.max_num_active_seqs > 0
+        assert self.kv_admission_lookahead >= 0
         assert self.kvcache_block_size % 256 == 0
         assert (
             self.num_kvcache_blocks_override is None
@@ -71,6 +77,7 @@ class Config:
         assert self.prefix_cache_backend in ("hash", "radix")
         assert 1 <= self.tensor_parallel_size <= 8
         assert self.scheduling_policy in ("fcfs", "pals")
+        assert self.metrics_summary_mode in ("cached", "full")
         assert self.qos_best_effort_slo_ms > 0
         assert self.qos_priority_boost_ms >= 0
         assert self.qos_aging_ms_per_step >= 0

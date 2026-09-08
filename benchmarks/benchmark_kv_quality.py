@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import random
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +20,8 @@ class NeedleCase:
     needle_fraction: float
     expected: str
     prompt: str
+    task: str = "literal"
+    filler_lines: int = 96
 
 
 def build_needle_case(case_id: str, needle_fraction: float, filler_lines: int = 96):
@@ -75,6 +79,64 @@ def build_quality_cases(filler_lines: int, repeats_per_position: int = 1):
     return cases
 
 
+def build_quality_matrix(lengths=(48, 96, 144), repeats=6, seed=42):
+    """Synthetic retrieval probes with random answers and held-out case seeds."""
+    if repeats < 1 or not lengths or any(length < 8 for length in lengths):
+        raise ValueError("matrix needs positive repeats and lengths >= 8")
+    rng = random.Random(seed)
+    cases = []
+    for length in lengths:
+        for fraction in (0.2, 0.5, 0.8):
+            for task in ("literal", "paraphrase", "distractors", "two_hop"):
+                for repeat in range(repeats):
+                    case_id = f"{seed}-{task}-{length}-{fraction}-{repeat}"
+                    entity = f"P{rng.randrange(100000, 999999)}"
+                    alias = f"A{rng.randrange(100000, 999999)}"
+                    expected = f"{rng.randrange(10000000, 99999999)}"
+                    records = [
+                        f"Log {index}: project P{rng.randrange(100000, 999999)} "
+                        f"has status {rng.choice(('pending', 'archived', 'reviewed'))}; "
+                        f"reference {rng.randrange(10000000, 99999999)}."
+                        for index in range(length)
+                    ]
+                    fact = f"The current access code for project {entity} is {expected}."
+                    question = f"What is the current access code for project {entity}?"
+                    if task == "paraphrase":
+                        fact = f"Project {entity} uses {expected} as its entry credential."
+                        question = f"Which numeric password unlocks {entity}?"
+                    elif task == "distractors":
+                        for index in range(0, length, 4):
+                            records[index] = (
+                                f"Obsolete access code for project {entity}: "
+                                f"{rng.randrange(10000000, 99999999)}. It is revoked."
+                            )
+                    elif task == "two_hop":
+                        records[int((1.0 - fraction) * (length - 1))] = (
+                            f"Department {alias} is assigned to project {entity}."
+                        )
+                        question = f"What is the access code of the project assigned to department {alias}?"
+                    records.insert(round(fraction * length), fact)
+                    prompt = "\n".join(records + ["", "/no_think", question,
+                                                     "Answer with only the numeric code."])
+                    cases.append(NeedleCase(case_id, fraction, expected, prompt, task, length))
+    rng.shuffle(cases)
+    return cases
+
+
+def quality_fingerprint(cases):
+    payload = json.dumps([asdict(case) for case in cases], sort_keys=True).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def retained_page_budget(metrics):
+    if metrics.get("kv_compression_policy") == "none":
+        return None
+    budget = metrics["kv_compression_sink_blocks"] + metrics["kv_compression_recent_blocks"]
+    if metrics.get("kv_compression_policy") == "query_aware":
+        budget += metrics["kv_compression_importance_blocks"]
+    return budget
+
+
 def request_json(url, payload=None, timeout_s=300.0):
     data = None
     headers = {"Accept": "application/json"}
@@ -100,7 +162,7 @@ def run_quality_benchmark(
     base_url = base_url.rstrip("/")
     server_metrics = request_json(f"{base_url}/v1/metrics", timeout_s=timeout_s)
     records = []
-    for case in cases:
+    for index, case in enumerate(cases):
         started = time.perf_counter()
         response = request_json(
             f"{base_url}/v1/chat/completions",
@@ -122,6 +184,8 @@ def run_quality_benchmark(
         records.append(
             {
                 "case_id": case.case_id,
+                "task": case.task,
+                "filler_lines": case.filler_lines,
                 "needle_fraction": case.needle_fraction,
                 "expected": case.expected,
                 "answer": answer,
@@ -129,8 +193,11 @@ def run_quality_benchmark(
                 "client_e2e_ms": (time.perf_counter() - started) * 1000.0,
                 "usage": response.get("usage", {}),
                 "metrics": response.get("x_nanovllm_metrics", {}),
+                "finish_reason": response.get("choices", [{}])[0].get("finish_reason"),
             }
         )
+        if (index + 1) % 12 == 0:
+            print(f"quality progress {index + 1}/{len(cases)}", flush=True)
     correct = sum(record["correct"] for record in records)
     dropped_tokens = sum(
         record["metrics"].get("kv_compression_dropped_tokens", 0)
@@ -159,6 +226,11 @@ def run_quality_benchmark(
             ),
             "kvcache_block_size": server_metrics.get("kvcache_block_size"),
             "cases": len(cases),
+            "case_fingerprint": quality_fingerprint(cases),
+            "retained_page_budget": retained_page_budget(server_metrics),
+            "kv_compression_trigger_free_ratio": server_metrics.get("kv_compression_trigger_free_ratio"),
+            "num_kvcache_blocks": server_metrics.get("num_kvcache_blocks"),
+            "temperature": 0.1,
             "max_tokens": max_tokens,
         },
         "summary": {
@@ -172,6 +244,13 @@ def run_quality_benchmark(
             ),
         },
         "cases": records,
+        "by_task": {
+            task: {
+                "cases": sum(record["task"] == task for record in records),
+                "correct": sum(record["correct"] for record in records if record["task"] == task),
+            }
+            for task in sorted({record["task"] for record in records})
+        },
     }
 
 
@@ -200,8 +279,12 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=128)
     parser.add_argument("--timeout-s", type=float, default=300.0)
     parser.add_argument("--output-json", type=Path, required=True)
+    parser.add_argument("--matrix", action="store_true")
+    parser.add_argument("--lengths", type=int, nargs="+", default=[48, 96, 144])
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
-    cases = build_quality_cases(args.filler_lines, args.repeats_per_position)
+    cases = (build_quality_matrix(args.lengths, args.repeats_per_position, args.seed)
+             if args.matrix else build_quality_cases(args.filler_lines, args.repeats_per_position))
     results = run_quality_benchmark(
         args.base_url,
         args.model,

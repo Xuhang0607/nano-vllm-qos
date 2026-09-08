@@ -1,0 +1,28 @@
+{
+  "scope": "GPU execution smoke, no speed or quality claim",
+  "model": "/mnt/d/models/Qwen3-0.6B",
+  "kv_pages": 4,
+  "step_token_budget": 128,
+  "runs": [
+    {
+      "horizon": 0,
+      "completed": 3,
+      "output_lengths": [
+        4,
+        4,
+        4
+      ],
+      "scheduler_steps": 24
+    },
+    {
+      "horizon": 32,
+      "completed": 3,
+      "output_lengths": [
+        4,
+        4,
+        4
+      ],
+      "scheduler_steps": 24
+    }
+  ]
+}

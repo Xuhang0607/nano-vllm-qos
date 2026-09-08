@@ -96,6 +96,39 @@ def test_summarize_values_uses_student_t_interval():
     assert summary["max"] == 3
 
 
+def test_summary_mode_difference_requires_explicit_ablation():
+    full, cached = make_run(), make_run()
+    full["metadata"]["metrics_summary_mode"] = "full"
+    cached["metadata"]["metrics_summary_mode"] = "cached"
+    baseline = aggregate_runs([full], "full")
+    candidate = aggregate_runs([cached], "cached")
+    with pytest.raises(ValueError, match="metrics_summary_mode"):
+        compare_groups(baseline, candidate)
+    result = compare_groups(baseline, candidate, allow_metrics_mode_change=True)
+    assert result["baseline"]["configuration"]["metrics_summary_mode"] == "full"
+
+
+def test_trace_runs_cannot_be_mixed_with_uninstrumented_measurements():
+    plain, traced = make_run(), make_run()
+    plain["metadata"]["scheduler_trace_enabled"] = False
+    traced["metadata"]["scheduler_trace_enabled"] = True
+    with pytest.raises(ValueError, match="scheduler_trace_enabled"):
+        aggregate_runs([plain, traced], "mixed")
+    with pytest.raises(ValueError, match="scheduler_trace_enabled"):
+        compare_groups(aggregate_runs([plain], "plain"),
+                       aggregate_runs([traced], "traced"), allow_metrics_mode_change=True)
+
+
+def test_admission_comparison_requires_explicit_ablation():
+    plain, reserve = make_run(), make_run()
+    plain["metadata"]["kv_admission_lookahead"] = 0
+    reserve["metadata"]["kv_admission_lookahead"] = 32
+    before, after = aggregate_runs([plain], "plain"), aggregate_runs([reserve], "reserve")
+    with pytest.raises(ValueError, match="kv_admission_lookahead"):
+        compare_groups(before, after)
+    compare_groups(before, after, allow_admission_change=True)
+
+
 def test_aggregate_runs_validates_configuration_and_aggregates_metrics():
     group = aggregate_runs([make_run(throughput=2), make_run(throughput=4)], "pals")
 
@@ -127,3 +160,15 @@ def test_compare_groups_and_render_markdown():
     )
     with pytest.raises(ValueError, match="different workloads"):
         compare_groups(baseline, incompatible)
+
+
+def test_device_context_requires_explicit_comparison_permission():
+    old, new = make_run(), make_run()
+    old["metadata"]["device_context_mode"] = "legacy_cpu"
+    new["metadata"]["device_context_mode"] = "scoped"
+    with pytest.raises(ValueError, match="device_context_mode"):
+        aggregate_runs([old, new], "mixed")
+    before, after = aggregate_runs([old], "old"), aggregate_runs([new], "new")
+    with pytest.raises(ValueError, match="device_context_mode"):
+        compare_groups(before, after)
+    compare_groups(before, after, allow_device_context_change=True)

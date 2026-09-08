@@ -6,6 +6,8 @@ from benchmarks.benchmark_kv_quality import (
     build_quality_cases,
     final_answer_text,
     normalize_answer,
+    build_quality_matrix,
+    quality_fingerprint,
 )
 
 
@@ -60,3 +62,15 @@ def test_needle_prompt_disables_thinking_for_strict_retrieval_evaluation():
     case = build_needle_case("early", 0.2, filler_lines=20)
 
     assert "/no_think" in case.prompt.splitlines()[-2]
+
+
+def test_quality_matrix_has_diverse_reproducible_cases_and_random_answers():
+    cases = build_quality_matrix(seed=19)
+    assert len(cases) == 216
+    assert {case.task for case in cases} == {"literal", "paraphrase", "distractors", "two_hop"}
+    assert cases == build_quality_matrix(seed=19)
+    assert quality_fingerprint(cases) != quality_fingerprint(build_quality_matrix(seed=20))
+    for case in cases:
+        assert case.expected not in case.case_id
+        assert case.prompt.count(case.expected) == 1
+        assert case.expected not in case.prompt.split("/no_think")[-1]

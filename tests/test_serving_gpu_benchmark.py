@@ -1,5 +1,7 @@
 import csv
 import json
+import threading
+import time
 
 import pytest
 
@@ -12,6 +14,9 @@ from benchmarks.benchmark_serving_gpu import (
     summarize_records,
     workload_fingerprint,
     write_results,
+    schedule_sustained,
+    dispatch_workload,
+    evidence_warnings,
 )
 
 
@@ -129,6 +134,7 @@ def test_summary_reports_percentiles_throughput_and_slo_goodput():
     assert summary["request_throughput_rps"] == 1
     assert summary["output_throughput_tokens_per_s"] == 4
     assert summary["slo_attainment"] == 0.5
+    assert summary["offered_slo_attainment"] == pytest.approx(1 / 3)
     assert summary["slo_goodput_rps"] == 0.5
     assert summary["latency_ms"]["ttft_ms"]["p50"] == 20
     assert summary["latency_ms"]["ttft_ms"]["p95"] == pytest.approx(29)
@@ -180,3 +186,42 @@ def test_write_results_creates_json_and_flat_request_csv(tmp_path):
         rows = list(csv.DictReader(handle))
     assert rows[0]["request_id"] == "a"
     assert rows[0]["ttft_ms"] == "10"
+
+
+def test_sustained_arrivals_are_reproducible_and_seed_changes_trace():
+    workload = build_workload(20, 20, "sustained", shared_prefix_repeats=1)
+    first = schedule_sustained(workload, 2.0, seed=7)
+    assert first == schedule_sustained(workload, 2.0, seed=7)
+    assert first != schedule_sustained(workload, 2.0, seed=8)
+    assert len(first) == 40
+    assert first[-1].arrival_ms > first[0].arrival_ms
+    assert schedule_sustained(workload, 2, arrival_process="uniform")[-1].arrival_ms == 20000
+    for invalid in (0, -1, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            schedule_sustained(workload, invalid)
+
+
+def test_dispatcher_counts_overload_without_queueing_arrivals(monkeypatch):
+    from benchmarks import benchmark_serving_gpu as benchmark
+
+    release = threading.Event()
+
+    def fake_request(*args):
+        assert release.wait(2)
+        spec = args[2]
+        return make_record(spec.request_id, spec.request_class, 10, True)
+
+    monkeypatch.setattr(benchmark, "_run_request", fake_request)
+    # Use a timer so the first slot remains occupied during the two-request burst.
+    timer = threading.Timer(0.2, release.set)
+    timer.start()
+    try:
+        records = dispatch_workload("unused", "model", build_workload(2, 0, "test"),
+                                    time.perf_counter(), None, 1, max_inflight=1)
+    finally:
+        release.set()
+        timer.join()
+    assert len(records) == 2
+    assert sum(item.get("client_rejected", False) for item in records) == 1
+    assert summarize_records(records, 1)["offered_slo_attainment"] == 0.5
+    assert any("saturated" in note for note in evidence_warnings(records, 1))

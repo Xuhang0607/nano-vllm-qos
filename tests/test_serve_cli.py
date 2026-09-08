@@ -30,6 +30,25 @@ def test_mooncake_serving_defaults_use_external_store_segment(monkeypatch):
     assert args.kv_compression_sink_blocks == 1
     assert args.kv_compression_recent_blocks == 8
     assert args.kv_compression_importance_blocks == 2
+    assert args.metrics_summary_mode == "cached"
+    assert args.scheduler_trace_path is None
+    assert args.max_num_active_seqs is None
+    assert args.kv_admission_lookahead == 0
+
+
+def test_scheduler_trace_option(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["nanovllm.serve", "--scheduler-trace-path", "/tmp/run.jsonl"])
+    assert parse_args().scheduler_trace_path == "/tmp/run.jsonl"
+
+
+def test_active_limit_option(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["nanovllm.serve", "--max-num-active-seqs", "8"])
+    assert parse_args().max_num_active_seqs == 8
+
+
+def test_full_summary_ablation_option(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["nanovllm.serve", "--mock", "--metrics-summary-mode", "full"])
+    assert parse_args().metrics_summary_mode == "full"
 
 
 def test_mooncake_serving_options_can_be_overridden(monkeypatch):

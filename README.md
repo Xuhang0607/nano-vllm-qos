@@ -13,6 +13,40 @@
 
 # Nano-vLLM QoS Lab
 
+Latest: [18 five-minute device-context trials](docs/device_context_sustained_zh.md)
+offered 10,818 requests; 10,817 succeeded and one baseline connection timed out.
+At 3 rps, mean output throughput increased 25.3%, but both modes accumulated backlog.
+Scoped-mode interactive SLO attainment averaged 52.6%; this is not sustainable 3-rps capacity.
+Trial-level confidence intervals and all failures are retained.
+
+> Evaluation update: the historical +70.2% output-throughput result used only eight
+> requests per run. It is exploratory, not a general speedup claim. New validation
+> adds equal retained-page budgets, 216 synthetic retrieval cases per policy, and
+> sustained open-loop arrivals. See the [validation protocol](docs/validation_protocol_zh.md).
+> The [independent-sample validation](docs/final_validation_zh.md) now reports 432
+> synthetic retrieval cases per policy: 70.6% accuracy for query-aware vs. 27.1%
+> for a fixed window at the same five-page budget; uncompressed accuracy is 74.1%.
+> The 58.3% cumulative KV-token drop is not a peak GPU-memory reduction.
+> Twelve sustained-load trials offered 9,012 requests: 8,797 succeeded and 215
+> timed out. The results do not establish a stable throughput gain; 213 WSL regression tests now pass.
+> A separate [metrics hot-path ablation](docs/metrics_summary_optimization_zh.md)
+> reduced historical-summary compute time by 92.6% across three GPU trials per mode,
+> but did not establish an end-to-end throughput gain. All 3,606 requests in that suite succeeded.
+> An opt-in [KV incident recorder and resident admission limit](docs/kv_preemption_diagnosis_zh.md)
+> now separate per-step batch size from KV-resident request count. The admission limit
+> is experimental and disabled by default; diagnostic traces are not speedup evidence.
+> A one-run diagnostic with an 8-request resident cap eliminated reclamation but
+> worsened interactive latency; the negative result is retained, not advertised as an optimization.
+> A [priority-aware page reservation experiment](docs/kv_page_admission_zh.md) also remains
+> disabled: six pressure trials reduced recomputation but worsened mean tail latency and throughput.
+> [Execution diagnostics](docs/engine_phase_profile_zh.md) identified a lingering default-device
+> dispatch context. Initialization now uses a scoped CUDA device and restores caller defaults;
+> pinned input tensors explicitly use CPU memory. Nsight on this host captured API/NVTX records
+> but no GPU kernel events, so no GPU utilization or kernel-time claim is made.
+> A separate [short online device-context ablation](docs/device_context_online_zh.md) completed
+> 1,086/1,086 requests across six alternating trials: mean output throughput increased 21.1%.
+> This single-load, 60-second arrival-window result is not a sustained-capacity or upstream speedup claim.
+
 This repository is a second-development project based on
 [GeeeekExplorer/nano-vllm](https://github.com/GeeeekExplorer/nano-vllm). It
 keeps nano-vLLM's compact inference path while exploring a serving problem:
@@ -91,7 +125,7 @@ restore remain future work.
 | SLO-aware scheduling | Per-request priority, TTFT/TPOT/E2E targets, EWMA service-time estimation, urgency ordering, aging, and preemption-victim selection | Integrated |
 | SLO-aware KV reclaim | Pressure-aware suffix reclaim that preserves an urgency-weighted, complete KV prefix and falls back to full reclaim for forward progress | Experimental, correctness tested |
 | Query-Aware KV compression | Decoupled logical/physical KV lengths, sink + rare query-overlap + recent page selection, periodic compaction, and compressed-decode fallback on preemption | Integrated experimental path, live GPU and quality tested |
-| Request observability | Queue, TTFT, TPOT, E2E, preemption, and SLO-attainment metrics | Integrated |
+| Request observability | Queue, TTFT, TPOT, E2E, preemption, and SLO metrics; exact completed-history summary caching with live-state refresh | Integrated |
 | Radix prefix cache | Longest-prefix match, edge splitting, canonical concurrent inserts, reference tracking, page alignment, and LRU leaf eviction | Integrated |
 | Baselines | FCFS vs. PALS and hash prefix cache vs. Radix prefix cache | Integrated |
 | Hierarchical cache index | Independent GPU/CPU/Mooncake Radix indexes and residency lookup | Control-plane prototype |
@@ -331,7 +365,11 @@ Raw results are stored in
 [`benchmarks/results`](benchmarks/results), and both benchmark scripts use fixed
 workloads so regressions can be tested in CI.
 
-### Live RTX 4060 Serving Measurement
+### Historical RTX 4060 Serving Exploratory Measurements
+
+This section preserves early short-trace observations, not sustained serving
+capacity claims. The [expanded validation](docs/final_validation_zh.md) includes
+equal-budget quality controls, repeated sustained arrivals, and failures.
 
 `benchmark_serving_gpu` sends a fixed mixed workload to the live OpenAI API and
 aggregates engine-side TTFT/TPOT/E2E p50/p95/p99, SLO goodput, prefix-cache
@@ -360,8 +398,9 @@ on this hardware. See the
 [Chinese live GPU benchmark guide](docs/gpu_serving_benchmark_zh.md).
 
 The same harness also measures the two KV-pressure policies added in this
-milestone. Each row below is the mean of three live runs on the same GPU and
-fixed request trace:
+milestone. Each row below is the mean of three historical live runs with only
+eight requests per run. These exploratory traces do not establish sustained
+capacity, stable tail latency, or a general speedup:
 
 | Experiment | Main benefit | Cost / boundary |
 | --- | --- | --- |
@@ -372,18 +411,21 @@ The compression quality probe repeats a synthetic Needle-in-a-Haystack task at
 early, middle, and late evidence positions. With thinking disabled and a strict
 final-answer matcher, `query_aware` passed 9/9 cases while cumulatively dropping
 KV tokens equivalent to 40.5% of prompt tokens; `sink_recent` passed 0/9 at a
-67.6% drop ratio. This
-small targeted test demonstrates why query relevance matters, but it is not a
-claim of unchanged quality on general benchmarks. The raw and generated reports
+67.6% drop ratio. The unequal retention budgets prevent attributing this
+difference to page selection alone. The newer five-page, 432-case evaluation
+provides an equal-budget control; neither test establishes lossless general
+quality. The raw and generated reports
 are checked in under [`benchmarks/results`](benchmarks/results).
 
-### Multi-Arrival-Rate PALS Pressure Test
+### Historical Multi-Arrival-Rate PALS Short Traces
 
 FCFS and PALS were each repeated three times at interactive arrival rates of
 2, 5, and 20 req/s. PALS reduced interactive E2E p95 by 96.5%, 91.2%, and
 87.9%, while moving SLO attainment from 0% to 100% at every load. Total request
 throughput stayed within 3.5%, and mean GPU utilization and peak memory were
-comparable, isolating the gain to scheduling rather than additional hardware.
+comparable. These are observations on short traces, not evidence of sustained
+20 req/s capacity or guaranteed 100% SLO attainment. See the
+[independent-sample validation](docs/final_validation_zh.md) for the expanded evaluation.
 
 ![PALS multi-arrival-rate GPU pressure chart](assets/pals-pressure.svg)
 
@@ -470,6 +512,11 @@ reports those capabilities as unavailable. See the
 [Windows Qwen3 guide (Chinese)](docs/windows_qwen3_zh.md).
 
 ## WSL2 CUDA + Mooncake Full Stack
+
+On Windows, double-click `start_nanovllm_qos.cmd` in the repository root. It
+checks and starts the Mooncake Master, Mooncake Store Service, and nano-vLLM GPU
+worker, then opens `http://127.0.0.1:8020/`. See the
+[one-click start guide (Chinese)](docs/one_click_start_zh.md).
 
 The reproducible WSL2 deployment uses three processes: a Mooncake Master, a
 persistent Store Service that owns the remote memory segment, and the

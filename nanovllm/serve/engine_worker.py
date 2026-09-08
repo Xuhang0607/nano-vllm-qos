@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -43,12 +44,55 @@ GenerationEvent = (
 )
 
 
+class GenerationEventQueue(Queue[GenerationEvent]):
+    """Thread-safe delivery with cancellable async waits and no per-request thread."""
+
+    def __init__(self):
+        super().__init__()
+        self._waiter_lock = Lock()
+        self._waiters = set()
+
+    @staticmethod
+    def _wake(future):
+        if not future.done():
+            future.set_result(None)
+
+    def put(self, item, block=True, timeout=None):
+        super().put(item, block=block, timeout=timeout)
+        with self._waiter_lock:
+            waiters = tuple(self._waiters)
+        for loop, future in waiters:
+            try:
+                loop.call_soon_threadsafe(self._wake, future)
+            except RuntimeError:  # The client event loop may have closed during shutdown.
+                with self._waiter_lock:
+                    self._waiters.discard((loop, future))
+
+    async def get_async(self):
+        loop = asyncio.get_running_loop()
+        while True:
+            future = loop.create_future()
+            waiter = (loop, future)
+            with self._waiter_lock:
+                # Register before checking the queue so a concurrent put cannot lose a wakeup.
+                self._waiters.add(waiter)
+            try:
+                try:
+                    return self.get_nowait()
+                except Empty:
+                    await future
+            finally:
+                with self._waiter_lock:
+                    self._waiters.discard(waiter)
+
+
 @dataclass(slots=True)
 class GenerationHandle:
     request_id: str
     created: int
-    events: Queue[GenerationEvent] = field(default_factory=Queue)
+    events: GenerationEventQueue = field(default_factory=GenerationEventQueue)
     cancelled: Event = field(default_factory=Event)
+    stream: bool = True
 
     def cancel(self):
         self.cancelled.set()
@@ -134,12 +178,14 @@ class InferenceWorker:
         messages: list[dict[str, str]],
         sampling_params: SamplingParams,
         qos: RequestQoS,
+        stream: bool = True,
     ) -> GenerationHandle:
         if not self.is_alive:
             raise RuntimeError("nano-vLLM inference worker is not running")
         handle = GenerationHandle(
             request_id=f"chatcmpl-nv-{uuid4().hex}",
             created=int(time()),
+            stream=stream,
         )
         self._incoming.put(
             _QueuedRequest(
@@ -259,7 +305,7 @@ class InferenceWorker:
     def _finish(engine, state, token_ids):
         state.token_ids = list(token_ids)
         text = engine.tokenizer.decode(token_ids, skip_special_tokens=True)
-        if text.startswith(state.emitted_text):
+        if state.queued.handle.stream and text.startswith(state.emitted_text):
             tail = text[len(state.emitted_text) :]
             if tail:
                 state.queued.handle.events.put(TextDelta(tail))
@@ -338,9 +384,10 @@ class InferenceWorker:
                         if state is None:
                             continue
                         state.token_ids.append(token_id)
-                        delta = self._decode_stable_delta(engine.tokenizer, state)
-                        if delta:
-                            state.queued.handle.events.put(TextDelta(delta))
+                        if state.queued.handle.stream:
+                            delta = self._decode_stable_delta(engine.tokenizer, state)
+                            if delta:
+                                state.queued.handle.events.put(TextDelta(delta))
                     for seq_id, token_ids in outputs:
                         state = active.pop(seq_id, None)
                         if state is not None:

@@ -1,0 +1,18 @@
+{
+  "scope": "Export or compare isolated-process Prefill/Decode device-context logits.",
+  "passed": true,
+  "comparisons": [
+    {
+      "phase": "prefill",
+      "logits_equal": true,
+      "max_abs_error": 0.0,
+      "argmax_equal": true
+    },
+    {
+      "phase": "decode",
+      "logits_equal": true,
+      "max_abs_error": 0.0,
+      "argmax_equal": true
+    }
+  ]
+}

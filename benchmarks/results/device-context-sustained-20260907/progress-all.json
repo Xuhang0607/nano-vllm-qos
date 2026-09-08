@@ -1,0 +1,1298 @@
+[
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-1-legacy_cpu-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 5.600038517000037,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 6,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 0.6883220000020174,
+        "queue_p95_ms": 1479.4554946999965
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 88.20472000000734,
+        "queue_p95_ms": 1606.947246999988
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03429199999516186,
+        "queue_p95_ms": 1136.2085312000045
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03134650000902184,
+        "queue_p95_ms": 1348.2331049000009
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.10355150001828406,
+        "queue_p95_ms": 1626.2800733499912
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1088.973830499981,
+        "queue_p95_ms": 1550.149278549975
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-1-legacy_cpu-2.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 5.190124137999898,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 6,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 0.06868300010864914,
+        "queue_p95_ms": 1348.0954199000962
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.034278000043741486,
+        "queue_p95_ms": 1169.3719256499435
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.044756499846698716,
+        "queue_p95_ms": 1288.1533933000128
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03169599995089811,
+        "queue_p95_ms": 1318.7581725999278
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.0366819999726431,
+        "queue_p95_ms": 1252.8044507998625
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 993.087970999909,
+        "queue_p95_ms": 1454.5827709998434
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-1-legacy_cpu-3.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 5.020796142999898,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 6,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 266.9074090001686,
+        "queue_p95_ms": 1449.4531863999327
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 54.68974900009016,
+        "queue_p95_ms": 1376.303606699821
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.04907149991595361,
+        "queue_p95_ms": 1343.4799394501397
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03260899995893851,
+        "queue_p95_ms": 1233.2796482498336
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.039115499930630904,
+        "queue_p95_ms": 1309.5964767501414
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 775.2435730000116,
+        "queue_p95_ms": 1225.171529799934
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-1-scoped-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 4.661766302999924,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 6,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 0.04365500001313194,
+        "queue_p95_ms": 992.5844783999651
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.045666500000152155,
+        "queue_p95_ms": 1031.667519749925
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03974700001663223,
+        "queue_p95_ms": 864.7492474999865
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.046110500022678025,
+        "queue_p95_ms": 990.9109554999418
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.04644999995662147,
+        "queue_p95_ms": 1015.4069784000284
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 751.921768499983,
+        "queue_p95_ms": 901.8468100500058
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-1-scoped-2.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 4.475122700000182,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 0.04631700005575112,
+        "queue_p95_ms": 998.1381607000117
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.036183000020173495,
+        "queue_p95_ms": 1004.1861217000189
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.040158500041798106,
+        "queue_p95_ms": 1139.9855838499943
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.031715499915208056,
+        "queue_p95_ms": 1005.4701038000871
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.04656549992887449,
+        "queue_p95_ms": 1137.8004465500906
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 807.4976565000043,
+        "queue_p95_ms": 954.3510124500585
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-1-scoped-3.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 4.475952237999998,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 29.189687999860325,
+        "queue_p95_ms": 944.1475835001024
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 45.33421350004119,
+        "queue_p95_ms": 946.7389013499655
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03573349999896891,
+        "queue_p95_ms": 959.3789383001649
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 2,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03583699992759648,
+        "queue_p95_ms": 1001.9998762499652
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 34.6981349998714,
+        "queue_p95_ms": 946.684458900063
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 709.0391929998532,
+        "queue_p95_ms": 891.5138437999985
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-2-legacy_cpu-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 601,
+    "failures": 0,
+    "arrival_window_s": 300.5,
+    "drain_s": 5.590877105000371,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 119,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 119,
+        "queue_p50_ms": 92.89332299977104,
+        "queue_p95_ms": 1475.2430568999443
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 11,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 315.34447450007974,
+        "queue_p95_ms": 1776.036004050252
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 10,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 149.09180149993517,
+        "queue_p95_ms": 1399.4302802498619
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 12,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 248.0532110000695,
+        "queue_p95_ms": 1502.0735875999435
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 150.1667734999046,
+        "queue_p95_ms": 1506.7957051996245
+      },
+      {
+        "end_s": 300.5,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1551.021116999891,
+        "queue_p95_ms": 1780.287412199914
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-2-legacy_cpu-2.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 601,
+    "failures": 0,
+    "arrival_window_s": 300.5,
+    "drain_s": 5.852847668000322,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 119,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 119,
+        "queue_p50_ms": 137.6002779998089,
+        "queue_p95_ms": 1475.2231231998394
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 208.98042049998367,
+        "queue_p95_ms": 1494.5900509002286
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 35.82399199990505,
+        "queue_p95_ms": 1108.4878303998719
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 14,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 194.93912950019876,
+        "queue_p95_ms": 1492.7112942499207
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 10,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 228.50980049997816,
+        "queue_p95_ms": 1428.5958175497854
+      },
+      {
+        "end_s": 300.5,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1505.5822614997396,
+        "queue_p95_ms": 1731.736859349644
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-2-legacy_cpu-3.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 601,
+    "failures": 0,
+    "arrival_window_s": 300.5,
+    "drain_s": 5.130694167000009,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 119,
+        "cohort_failures": 0,
+        "client_outstanding": 11,
+        "unknown_terminal_times": 0,
+        "queue_samples": 119,
+        "queue_p50_ms": 112.86908900001436,
+        "queue_p95_ms": 1475.6441399998948
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 414.87364399995386,
+        "queue_p95_ms": 2531.0467565998797
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 8,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 88.56390000028114,
+        "queue_p95_ms": 1260.414115750086
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 11,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 162.03847149995454,
+        "queue_p95_ms": 1494.8623023001346
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 179.25689250000687,
+        "queue_p95_ms": 1495.9387080503575
+      },
+      {
+        "end_s": 300.5,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 8,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1373.6682780001956,
+        "queue_p95_ms": 1601.6074116000937
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-2-scoped-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 601,
+    "failures": 0,
+    "arrival_window_s": 300.5,
+    "drain_s": 4.715164027999912,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 119,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 119,
+        "queue_p50_ms": 30.743182000151137,
+        "queue_p95_ms": 1303.9261973997782
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 259.13342950002516,
+        "queue_p95_ms": 1380.6681265502673
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 39.05540849996214,
+        "queue_p95_ms": 1015.6397837500662
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 11,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 214.76251099988986,
+        "queue_p95_ms": 1336.466331000156
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 79.36543300002086,
+        "queue_p95_ms": 1272.7916947997753
+      },
+      {
+        "end_s": 300.5,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 8,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1233.3755350000501,
+        "queue_p95_ms": 1460.8034118999967
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-2-scoped-2.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 601,
+    "failures": 0,
+    "arrival_window_s": 300.5,
+    "drain_s": 4.822286055000382,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 119,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 119,
+        "queue_p50_ms": 26.76915799975177,
+        "queue_p95_ms": 1298.393597100039
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 151.86848750022364,
+        "queue_p95_ms": 1346.9837314001325
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 71.4615550000417,
+        "queue_p95_ms": 1026.4431280996857
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 11,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 154.5612764998623,
+        "queue_p95_ms": 1422.7262234001273
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 8,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 87.31764049980484,
+        "queue_p95_ms": 1268.7520217500373
+      },
+      {
+        "end_s": 300.5,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 8,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1200.9593595000752,
+        "queue_p95_ms": 1433.0387626499714
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-2-scoped-3.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 601,
+    "failures": 0,
+    "arrival_window_s": 300.5,
+    "drain_s": 4.366673653999926,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 119,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 119,
+        "queue_p50_ms": 29.796650000207592,
+        "queue_p95_ms": 1220.3352075997825
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 6,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 174.48519250001482,
+        "queue_p95_ms": 1305.0444635995973
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 0.03890799985128979,
+        "queue_p95_ms": 1012.0172138999122
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 9,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 193.34433199992418,
+        "queue_p95_ms": 1276.5179610500809
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 120,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 120,
+        "queue_p50_ms": 129.09666800032937,
+        "queue_p95_ms": 1210.6726491501377
+      },
+      {
+        "end_s": 300.5,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 8,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1062.8441690000727,
+        "queue_p95_ms": 1292.0373662000202
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-3-legacy_cpu-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 901,
+    "failures": 1,
+    "arrival_window_s": 300.33333333333417,
+    "drain_s": 173.106885218665,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 56,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 5138.8428209993435,
+        "queue_p95_ms": 21784.523844999418
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 181,
+        "cohort_failures": 0,
+        "client_outstanding": 108,
+        "unknown_terminal_times": 0,
+        "queue_samples": 181,
+        "queue_p50_ms": 30498.03371300004,
+        "queue_p95_ms": 49352.23168399989
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 162,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 63574.232392999875,
+        "queue_p95_ms": 86312.38405420026
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 236,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 105144.86399350016,
+        "queue_p95_ms": 127585.48064389962
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 180,
+        "cohort_failures": 1,
+        "client_outstanding": 314,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 141318.82080500055,
+        "queue_p95_ms": 155808.6642983998
+      },
+      {
+        "end_s": 300.33333333333417,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 315,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 151404.0511085,
+        "queue_p95_ms": 156802.2919032506
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-3-legacy_cpu-2.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 901,
+    "failures": 0,
+    "arrival_window_s": 300.33333333333417,
+    "drain_s": 97.97863538766617,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 41,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 2103.190139000617,
+        "queue_p95_ms": 15019.392707899804
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 181,
+        "cohort_failures": 0,
+        "client_outstanding": 78,
+        "unknown_terminal_times": 0,
+        "queue_samples": 181,
+        "queue_p50_ms": 17848.346867000146,
+        "queue_p95_ms": 31261.14518399936
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 116,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 35192.64810000004,
+        "queue_p95_ms": 49885.56056589968
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 172,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 57886.31684450002,
+        "queue_p95_ms": 73262.04656525038
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 217,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 79462.04728249996,
+        "queue_p95_ms": 91439.68277100039
+      },
+      {
+        "end_s": 300.33333333333417,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 219,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 87002.24249899975,
+        "queue_p95_ms": 93594.48884839927
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-3-legacy_cpu-3.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 901,
+    "failures": 0,
+    "arrival_window_s": 300.33333333333417,
+    "drain_s": 101.90630020666542,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 41,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 419.29391299981944,
+        "queue_p95_ms": 10720.434094299433
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 181,
+        "cohort_failures": 0,
+        "client_outstanding": 74,
+        "unknown_terminal_times": 0,
+        "queue_samples": 181,
+        "queue_p50_ms": 14105.17437999988,
+        "queue_p95_ms": 28603.815701000713
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 110,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 31543.970439000077,
+        "queue_p95_ms": 47107.18629899957
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 158,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 53397.85155949994,
+        "queue_p95_ms": 71932.42090930039
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 216,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 80925.23163149963,
+        "queue_p95_ms": 93451.68076485014
+      },
+      {
+        "end_s": 300.33333333333417,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 218,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 87392.11833349965,
+        "queue_p95_ms": 92095.49026114929
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-3-scoped-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 901,
+    "failures": 0,
+    "arrival_window_s": 300.33333333333417,
+    "drain_s": 68.86687211366632,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 37,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 997.4039409999023,
+        "queue_p95_ms": 11761.875130000408
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 181,
+        "cohort_failures": 0,
+        "client_outstanding": 69,
+        "unknown_terminal_times": 0,
+        "queue_samples": 181,
+        "queue_p50_ms": 14006.37346000076,
+        "queue_p95_ms": 24860.773309999786
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 96,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 25761.799070999587,
+        "queue_p95_ms": 35917.659954499955
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 131,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 39982.944478999794,
+        "queue_p95_ms": 50068.753110149686
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 166,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 53897.228785500374,
+        "queue_p95_ms": 63101.01455584995
+      },
+      {
+        "end_s": 300.33333333333417,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 168,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 45327.25140299954,
+        "queue_p95_ms": 59034.852569699615
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-3-scoped-2.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 901,
+    "failures": 0,
+    "arrival_window_s": 300.33333333333417,
+    "drain_s": 24.124518930665566,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 22,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 319.25648500055104,
+        "queue_p95_ms": 3332.4666587003776
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 181,
+        "cohort_failures": 0,
+        "client_outstanding": 27,
+        "unknown_terminal_times": 0,
+        "queue_samples": 181,
+        "queue_p50_ms": 187.8198770000381,
+        "queue_p95_ms": 6710.895573999551
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 32,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 1484.2280399998344,
+        "queue_p95_ms": 10680.434368099759
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 45,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 10306.447352500072,
+        "queue_p95_ms": 14246.681769499355
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 60,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 15365.326437000022,
+        "queue_p95_ms": 20433.949275599614
+      },
+      {
+        "end_s": 300.33333333333417,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 61,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 14655.937781499688,
+        "queue_p95_ms": 19291.197291550136
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  },
+  {
+    "input": "benchmarks\\results\\device-context-sustained-20260907\\device-3-scoped-3.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "scoped",
+    "requests": 901,
+    "failures": 0,
+    "arrival_window_s": 300.33333333333417,
+    "drain_s": 20.937978014665713,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 21,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 177.43073500059836,
+        "queue_p95_ms": 1334.1903252005065
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 181,
+        "cohort_failures": 0,
+        "client_outstanding": 23,
+        "unknown_terminal_times": 0,
+        "queue_samples": 181,
+        "queue_p50_ms": 184.11774600008357,
+        "queue_p95_ms": 5095.602560999396
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 179,
+        "cohort_failures": 0,
+        "client_outstanding": 25,
+        "unknown_terminal_times": 0,
+        "queue_samples": 179,
+        "queue_p50_ms": 351.6699149995475,
+        "queue_p95_ms": 6989.873388399701
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 36,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 6227.795482499914,
+        "queue_p95_ms": 10751.941762550678
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 180,
+        "cohort_failures": 0,
+        "client_outstanding": 52,
+        "unknown_terminal_times": 0,
+        "queue_samples": 180,
+        "queue_p50_ms": 11836.608792500101,
+        "queue_p95_ms": 16234.02940855035
+      },
+      {
+        "end_s": 300.33333333333417,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 53,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 10574.89005349953,
+        "queue_p95_ms": 15391.484174449533
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  }
+]

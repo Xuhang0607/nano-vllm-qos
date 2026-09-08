@@ -1,9 +1,14 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Thread
+
 from nanovllm.engine.qos import RequestQoS
 from nanovllm.sampling_params import SamplingParams
 from nanovllm.serve.engine_worker import (
     GenerationCancelled,
     GenerationFailed,
     GenerationFinished,
+    GenerationEventQueue,
     InferenceWorker,
     TextDelta,
 )
@@ -85,3 +90,70 @@ def test_worker_rejects_prompt_and_output_beyond_context_window():
 
     assert isinstance(result, GenerationFailed)
     assert "context length exceeded" in result.message
+
+
+def test_async_event_delivery_works_with_executor_exhausted():
+    async def exercise():
+        loop = asyncio.get_running_loop()
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        release = Event()
+        blocked = loop.run_in_executor(None, release.wait)
+        queues = [GenerationEventQueue() for _ in range(128)]
+        pending = [asyncio.create_task(queue.get_async()) for queue in queues]
+        await asyncio.sleep(0)
+        producer = Thread(target=queues[-1].put, args=(TextDelta("ready"),))
+        try:
+            producer.start()
+            event = await asyncio.wait_for(pending[-1], timeout=1)
+            assert event.text == "ready"
+            assert not blocked.done()
+        finally:
+            producer.join()
+            release.set()
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            await blocked
+        assert all(not queue._waiters for queue in queues)
+
+    asyncio.run(exercise())
+
+
+def test_cancelled_async_wait_does_not_consume_later_events():
+    async def exercise():
+        queue = GenerationEventQueue()
+        task = asyncio.create_task(queue.get_async())
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        queue.put(TextDelta("first"))
+        queue.put(TextDelta("second"))
+        assert (await queue.get_async()).text == "first"
+        assert (await queue.get_async()).text == "second"
+        assert not queue._waiters
+
+    asyncio.run(exercise())
+
+
+def test_non_streaming_worker_decodes_only_once(monkeypatch):
+    engine = MockEngine(step_delay_s=0)
+    decode = engine.tokenizer.decode
+    calls = []
+
+    def counted_decode(tokens, **kwargs):
+        calls.append(tuple(tokens))
+        return decode(tokens, **kwargs)
+
+    monkeypatch.setattr(engine.tokenizer, "decode", counted_decode)
+    worker = InferenceWorker(lambda: engine, "nano-test", "test")
+    worker.start()
+    try:
+        handle = worker.submit([{"role": "user", "content": "test"}],
+                               SamplingParams(max_tokens=32), RequestQoS(), stream=False)
+        event = handle.events.get(timeout=3)
+        assert isinstance(event, GenerationFinished)
+        assert len(event.token_ids) == 32
+        assert len(calls) == 1
+        assert event.text == decode(event.token_ids)
+    finally:
+        worker.stop()

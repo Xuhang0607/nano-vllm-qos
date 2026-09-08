@@ -1,0 +1,74 @@
+[
+  {
+    "input": "benchmarks/results/device-context-sustained-20260907/device-1-legacy_cpu-1.json",
+    "scope": "Reconstruct client outstanding work; this is not the engine's active queue.",
+    "mode": "legacy_cpu",
+    "requests": 301,
+    "failures": 0,
+    "arrival_window_s": 301.0,
+    "drain_s": 5.600038517000037,
+    "windows": [
+      {
+        "end_s": 60.0,
+        "cohort_requests": 59,
+        "cohort_failures": 0,
+        "client_outstanding": 6,
+        "unknown_terminal_times": 0,
+        "queue_samples": 59,
+        "queue_p50_ms": 0.6883220000020174,
+        "queue_p95_ms": 1479.4554946999965
+      },
+      {
+        "end_s": 120.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 88.20472000000734,
+        "queue_p95_ms": 1606.947246999988
+      },
+      {
+        "end_s": 180.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 7,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03429199999516186,
+        "queue_p95_ms": 1136.2085312000045
+      },
+      {
+        "end_s": 240.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 5,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.03134650000902184,
+        "queue_p95_ms": 1348.2331049000009
+      },
+      {
+        "end_s": 300.0,
+        "cohort_requests": 60,
+        "cohort_failures": 0,
+        "client_outstanding": 3,
+        "unknown_terminal_times": 0,
+        "queue_samples": 60,
+        "queue_p50_ms": 0.10355150001828406,
+        "queue_p95_ms": 1626.2800733499912
+      },
+      {
+        "end_s": 301.0,
+        "cohort_requests": 2,
+        "cohort_failures": 0,
+        "client_outstanding": 4,
+        "unknown_terminal_times": 0,
+        "queue_samples": 2,
+        "queue_p50_ms": 1088.973830499981,
+        "queue_p95_ms": 1550.149278549975
+      }
+    ],
+    "warning": "Timeout ends a client wait, not necessarily backend work; no stability guarantee"
+  }
+]

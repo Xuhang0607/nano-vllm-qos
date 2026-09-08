@@ -15,11 +15,18 @@ def parse_args():
         "--mock", action="store_true", help="Use the UI development backend"
     )
     parser.add_argument("--scheduling-policy", choices=("fcfs", "pals"), default="pals")
+    parser.add_argument("--scheduler-trace-path", help="Exclusive JSONL flight recorder path; diagnostic only")
+    parser.add_argument("--metrics-summary-mode", choices=("cached", "full"), default="cached",
+                        help="Reuse unchanged completed-request summaries; full is the ablation baseline")
     parser.add_argument(
         "--prefix-cache-backend", choices=("hash", "radix"), default="radix"
     )
     parser.add_argument("--max-model-len", type=int, default=40960)
     parser.add_argument("--max-num-seqs", type=int, default=256)
+    parser.add_argument("--kv-admission-lookahead", type=int, default=0,
+                        help="Soft priority-aware KV growth reserve in decode tokens; 0 disables")
+    parser.add_argument("--max-num-active-seqs", type=int,
+                        help="Optional KV-resident request admission limit; distinct from step batch size")
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument(
         "--num-kvcache-blocks",
@@ -95,6 +102,10 @@ def main():
         raise SystemExit("--kv-reclaim-target-free-blocks must be at least 1")
     if args.num_kvcache_blocks is not None and args.num_kvcache_blocks < 1:
         raise SystemExit("--num-kvcache-blocks must be at least 1")
+    if args.max_num_active_seqs is not None and args.max_num_active_seqs < 1:
+        raise SystemExit("--max-num-active-seqs must be at least 1")
+    if args.kv_admission_lookahead < 0:
+        raise SystemExit("--kv-admission-lookahead must be non-negative")
     if args.kv_compression_sink_blocks < 1:
         raise SystemExit("--kv-compression-sink-blocks must be at least 1")
     if args.kv_compression_recent_blocks < 1:
@@ -127,9 +138,13 @@ def main():
 
             engine_kwargs = {
                 "scheduling_policy": args.scheduling_policy,
+                "metrics_summary_mode": args.metrics_summary_mode,
+                "scheduler_trace_path": args.scheduler_trace_path,
                 "prefix_cache_backend": args.prefix_cache_backend,
                 "max_model_len": args.max_model_len,
                 "max_num_seqs": args.max_num_seqs,
+                "max_num_active_seqs": args.max_num_active_seqs,
+                "kv_admission_lookahead": args.kv_admission_lookahead,
                 "gpu_memory_utilization": args.gpu_memory_utilization,
                 "num_kvcache_blocks_override": args.num_kvcache_blocks,
                 "enforce_eager": args.enforce_eager,

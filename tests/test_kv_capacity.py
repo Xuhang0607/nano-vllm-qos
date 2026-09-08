@@ -1,5 +1,9 @@
 import pytest
 
+pytest.importorskip("torch", reason="ModelRunner import requires the GPU dependency stack")
+pytest.importorskip("flash_attn")
+pytest.importorskip("triton")
+
 from nanovllm.engine.model_runner import resolve_kv_cache_blocks
 
 

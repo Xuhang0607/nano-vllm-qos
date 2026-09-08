@@ -15,6 +15,12 @@ export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.9}"
 export PATH="$CUDA_HOME/bin:$VENV_DIR/bin:$PATH"
 
 EXTRA_ARGS=()
+if [[ -n "${MAX_NUM_ACTIVE_SEQS:-}" ]]; then
+  EXTRA_ARGS+=(--max-num-active-seqs "$MAX_NUM_ACTIVE_SEQS")
+fi
+if [[ -n "${SCHEDULER_TRACE_PATH:-}" ]]; then
+  EXTRA_ARGS+=(--scheduler-trace-path "$SCHEDULER_TRACE_PATH")
+fi
 if [[ -n "${NUM_KVCACHE_BLOCKS:-}" ]]; then
   EXTRA_ARGS+=(--num-kvcache-blocks "$NUM_KVCACHE_BLOCKS")
 fi
@@ -36,10 +42,12 @@ if [[ "${ENABLE_MOONCAKE:-0}" == "1" ]]; then
 fi
 
 cd "$PROJECT_DIR"
-exec "$VENV_DIR/bin/python" -m nanovllm.serve \
+exec "$VENV_DIR/bin/python" -m "${VALIDATION_SERVE_MODULE:-nanovllm.serve}" \
   --model "$MODEL_DIR" \
   --served-model-name Qwen3-0.6B \
   --scheduling-policy "$SCHEDULING_POLICY" \
+  --metrics-summary-mode "${METRICS_SUMMARY_MODE:-cached}" \
+  --kv-admission-lookahead "${KV_ADMISSION_LOOKAHEAD:-0}" \
   --prefix-cache-backend "$PREFIX_CACHE_BACKEND" \
   --kv-reclaim-policy "${KV_RECLAIM_POLICY:-slo_aware}" \
   --kv-reclaim-min-keep-ratio "${KV_RECLAIM_MIN_KEEP_RATIO:-0.0}" \

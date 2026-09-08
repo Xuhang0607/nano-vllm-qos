@@ -128,6 +128,11 @@ class BlockManager:
     def cached_prefix_blocks(self, seq: Sequence) -> int:
         return len(self._lookup_cached_blocks(seq))
 
+    def planned_allocation_pages(self, seq: Sequence) -> int:
+        """Free-pool cost of a successful can_allocate plan, without another lookup."""
+        matched = self.pending_matches[seq.seq_id]
+        return seq.num_blocks - sum(block_id in self.used_block_ids for block_id in matched)
+
     def allocate(self, seq: Sequence, num_cached_blocks: int):
         assert not seq.block_table
         cached_block_ids = self.pending_matches.pop(seq.seq_id, None)
@@ -375,13 +380,13 @@ class BlockManager:
                 1.0 / document_frequency[token_id]
                 for token_id in tokens & query_ids
             )
-            scored.append((score, -position, position))
+            scored.append((score, position))
+        # Fill the configured budget even without matches; ties prefer recent history.
         important_positions = {
             position
-            for score, _negative_position, position in sorted(
+            for score, position in sorted(
                 scored, reverse=True
             )[:importance_blocks]
-            if score > 0
         }
         keep_positions = sink_positions | recent_positions | important_positions
         return self._compress_keep_positions(seq, keep_positions)

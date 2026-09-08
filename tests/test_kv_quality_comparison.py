@@ -44,3 +44,28 @@ def test_quality_comparison_rejects_different_case_sets():
     second["metadata"]["max_tokens"] = 256
     with pytest.raises(ValueError, match="token budgets"):
         compare_quality_runs([first, second])
+
+
+def test_strict_comparison_requires_same_budget_and_prompt_fingerprint():
+    runs = [make_run("none", 2, 0), make_run("sink_recent", 1, 0.5),
+            make_run("query_aware", 2, 0.5)]
+    for run in runs:
+        run["metadata"].update(case_fingerprint="same-prompts", retained_page_budget=5)
+    assert compare_quality_runs(runs, True)["equal_retained_page_budget"]
+    runs[-1]["metadata"]["retained_page_budget"] = 7
+    with pytest.raises(ValueError, match="equal retained"):
+        compare_quality_runs(runs, True)
+    runs[-1]["metadata"]["retained_page_budget"] = 5
+    runs[-1]["metadata"]["case_fingerprint"] = "changed-prompts"
+    with pytest.raises(ValueError, match="case_fingerprint"):
+        compare_quality_runs(runs, True)
+
+
+def test_paired_quality_distinguishes_lost_and_gained_correct_answers():
+    before, after = make_run("none", 1, 0), make_run("query_aware", 1, 0.5)
+    for item, correct in zip(before["cases"], [True, False]):
+        item["correct"] = correct
+    for item, correct in zip(after["cases"], [False, True]):
+        item["correct"] = correct
+    paired = compare_quality_runs([before, after])["paired_vs_uncompressed"]["query_aware"]
+    assert paired == {"baseline_correct": 1, "lost_correct": 1, "gained_correct": 1}

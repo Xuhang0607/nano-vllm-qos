@@ -1,0 +1,1624 @@
+{
+  "baseline": {
+    "name": "No page reservation",
+    "runs": 3,
+    "evidence_warnings": [
+      "Measurement lasted less than 300 seconds; not a sustained-load result.",
+      "batch: only 180 completions; tail percentiles are exploratory.",
+      "interactive: only 181 completions; tail percentiles are exploratory."
+    ],
+    "configuration": {
+      "kv_admission_lookahead": 0,
+      "max_num_active_seqs": null,
+      "scheduler_trace_enabled": false,
+      "metrics_summary_mode": "cached",
+      "client_max_inflight": 512,
+      "model": "Qwen3-0.6B",
+      "backend": "CUDA",
+      "hardware": null,
+      "policy": "pals",
+      "prefix_cache_backend": "radix",
+      "kv_reclaim_policy": "recompute",
+      "kv_compression_policy": "none",
+      "kv_compression_sink_blocks": 1,
+      "kv_compression_recent_blocks": 2,
+      "kv_compression_importance_blocks": 2,
+      "kv_compression_query_tokens": 64,
+      "kv_compression_trigger_free_ratio": 1.0,
+      "num_kvcache_blocks": 64,
+      "num_kvcache_blocks_override": 64,
+      "max_num_seqs": 8,
+      "max_model_len": 8192,
+      "remote_kv_cost_aware": true,
+      "workload_fingerprint": "1a9a30a9bcb15c61",
+      "workload_label": "admission-sustained-3",
+      "interactive_delay_ms": 333.33333333333576,
+      "interactive_arrival_rate_rps": 2.9999999999999782,
+      "warmup_enabled": true,
+      "gpu_sampling_interval_ms": 200,
+      "requests": 361,
+      "workload_parameters": {
+        "seed": 20260907,
+        "arrival_rate_rps": 3.0,
+        "arrival_process": "uniform"
+      }
+    },
+    "metrics": {
+      "batch.client_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 63480.29609236663,
+        "stdev": 6718.107669028533,
+        "min": 55756.427442949906,
+        "max": 67966.21797109998,
+        "ci95_low": 46790.24452257155,
+        "ci95_high": 80170.34766216172,
+        "ci95_half_width": 16690.05156979508
+      },
+      "batch.dispatch_lag_ms_p95": {
+        "samples": 3,
+        "mean": 0.8738559726126025,
+        "stdev": 0.11154851019665163,
+        "min": 0.7895286506595766,
+        "max": 1.0003389505115474,
+        "ci95_low": 0.5967317466495576,
+        "ci95_high": 1.1509801985756474,
+        "ci95_half_width": 0.2771242259630449
+      },
+      "batch.e2e_ms_p50": {
+        "samples": 3,
+        "mean": 45394.70681600002,
+        "stdev": 6356.755701992311,
+        "min": 41287.69029050005,
+        "max": 52716.768438,
+        "ci95_low": 29602.375744565685,
+        "ci95_high": 61187.03788743436,
+        "ci95_half_width": 15792.331071434335
+      },
+      "batch.e2e_ms_p95": {
+        "samples": 3,
+        "mean": 63440.88033865005,
+        "stdev": 6719.988146278636,
+        "min": 55715.82399080004,
+        "max": 67936.55067910012,
+        "ci95_low": 46746.157027372654,
+        "ci95_high": 80135.60364992745,
+        "ci95_half_width": 16694.723311277394
+      },
+      "batch.e2e_ms_p99": {
+        "samples": 3,
+        "mean": 75221.38370595998,
+        "stdev": 10124.359537065166,
+        "min": 63715.06878495998,
+        "max": 82765.12591448,
+        "ci95_low": 50069.05047323003,
+        "ci95_high": 100373.71693868992,
+        "ci95_half_width": 25152.333232729943
+      },
+      "batch.failed_requests": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "batch.offered_slo_attainment": {
+        "samples": 3,
+        "mean": 0.15925925925925927,
+        "stdev": 0.043152519250855725,
+        "min": 0.1111111111111111,
+        "max": 0.19444444444444445,
+        "ci95_low": 0.052053806898966326,
+        "ci95_high": 0.2664647116195522,
+        "ci95_half_width": 0.10720545236029294
+      },
+      "batch.scheduled_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 63480.78791891719,
+        "stdev": 6718.228688829561,
+        "min": 55756.78138473381,
+        "max": 67966.80161086725,
+        "ci95_low": 46790.43569500645,
+        "ci95_high": 80171.14014282794,
+        "ci95_half_width": 16690.35222391074
+      },
+      "batch.slo_attainment": {
+        "samples": 3,
+        "mean": 0.15925925925925927,
+        "stdev": 0.043152519250855725,
+        "min": 0.1111111111111111,
+        "max": 0.19444444444444445,
+        "ci95_low": 0.052053806898966326,
+        "ci95_high": 0.2664647116195522,
+        "ci95_half_width": 0.10720545236029294
+      },
+      "batch.tpot_ms_p50": {
+        "samples": 3,
+        "mean": 86.27916327559065,
+        "stdev": 1.8835428563912449,
+        "min": 84.38818503149636,
+        "max": 88.15518162992126,
+        "ci95_low": 81.59980579044411,
+        "ci95_high": 90.95852076073719,
+        "ci95_half_width": 4.679357485146535
+      },
+      "batch.tpot_ms_p95": {
+        "samples": 3,
+        "mean": 241.51879861706016,
+        "stdev": 23.031990741338007,
+        "min": 218.20045910078727,
+        "max": 264.25334101732244,
+        "ci95_low": 184.2995440046135,
+        "ci95_high": 298.7380532295068,
+        "ci95_half_width": 57.21925461244666
+      },
+      "batch.tpot_ms_p99": {
+        "samples": 3,
+        "mean": 281.7822324047769,
+        "stdev": 28.79291612798641,
+        "min": 254.91375740354357,
+        "max": 312.1751198364563,
+        "ci95_low": 210.25089073898187,
+        "ci95_high": 353.3135740705719,
+        "ci95_half_width": 71.53134166579501
+      },
+      "batch.ttft_ms_p50": {
+        "samples": 3,
+        "mean": 29120.721035499962,
+        "stdev": 6664.420786146106,
+        "min": 23159.225944499893,
+        "max": 36315.722562999996,
+        "ci95_low": 12564.045840135455,
+        "ci95_high": 45677.39623086447,
+        "ci95_half_width": 16556.675195364507
+      },
+      "batch.ttft_ms_p95": {
+        "samples": 3,
+        "mean": 56129.50912484995,
+        "stdev": 6288.727647888179,
+        "min": 48875.701137350035,
+        "max": 60047.61354729983,
+        "ci95_low": 40506.18274746437,
+        "ci95_high": 71752.83550223552,
+        "ci95_half_width": 15623.326377385578
+      },
+      "batch.ttft_ms_p99": {
+        "samples": 3,
+        "mean": 57374.69658187998,
+        "stdev": 6528.407961461738,
+        "min": 49868.07522801999,
+        "max": 61726.41130174994,
+        "ci95_low": 41155.92324370078,
+        "ci95_high": 73593.46992005919,
+        "ci95_half_width": 16218.7733381792
+      },
+      "cache.prefix_cache_block_hit_rate": {
+        "samples": 3,
+        "mean": 0.18570700236526788,
+        "stdev": 0.0019260171895335272,
+        "min": 0.18353877511404446,
+        "max": 0.1872196427166129,
+        "ci95_low": 0.18092212427142293,
+        "ci95_high": 0.19049188045911283,
+        "ci95_half_width": 0.004784878093844945
+      },
+      "gpu.memory_used_mib.max": {
+        "samples": 3,
+        "mean": 5155.0,
+        "stdev": 170.53738593047566,
+        "min": 4969.0,
+        "max": 5304.0,
+        "ci95_low": 4731.327456185401,
+        "ci95_high": 5578.672543814599,
+        "ci95_half_width": 423.67254381459907
+      },
+      "gpu.memory_used_mib.mean": {
+        "samples": 3,
+        "mean": 4952.813753073772,
+        "stdev": 116.81386694302414,
+        "min": 4845.054082714741,
+        "max": 5076.952890792291,
+        "ci95_low": 4662.608600165263,
+        "ci95_high": 5243.0189059822815,
+        "ci95_half_width": 290.2051529085092
+      },
+      "gpu.memory_used_mib.p95": {
+        "samples": 3,
+        "mean": 5100.0,
+        "stdev": 199.3313823761828,
+        "min": 4891.0,
+        "max": 5288.0,
+        "ci95_low": 4604.793430645015,
+        "ci95_high": 5595.206569354985,
+        "ci95_half_width": 495.20656935498477
+      },
+      "gpu.peak_memory_fraction": {
+        "samples": 3,
+        "mean": 0.629579872984856,
+        "stdev": 0.020827721779491413,
+        "min": 0.6068637029799707,
+        "max": 0.6477772349780166,
+        "ci95_low": 0.5778367679757451,
+        "ci95_high": 0.6813229779939668,
+        "ci95_half_width": 0.051743105009110786
+      },
+      "gpu.utilization_gpu_percent.max": {
+        "samples": 3,
+        "mean": 100.0,
+        "stdev": 0.0,
+        "min": 100.0,
+        "max": 100.0,
+        "ci95_low": 100.0,
+        "ci95_high": 100.0,
+        "ci95_half_width": 0.0
+      },
+      "gpu.utilization_gpu_percent.mean": {
+        "samples": 3,
+        "mean": 36.62397474654252,
+        "stdev": 0.4593258668502488,
+        "min": 36.179871520342616,
+        "max": 37.097142857142856,
+        "ci95_low": 35.48285394545538,
+        "ci95_high": 37.76509554762966,
+        "ci95_half_width": 1.1411208010871374
+      },
+      "gpu.utilization_gpu_percent.p95": {
+        "samples": 3,
+        "mean": 56.749999999999964,
+        "stdev": 0.6873863542433338,
+        "min": 56.0,
+        "max": 57.34999999999991,
+        "ci95_low": 55.04229981627343,
+        "ci95_high": 58.4577001837265,
+        "ci95_half_width": 1.7077001837265353
+      },
+      "interactive.client_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 42360.84095899992,
+        "stdev": 5377.39412320375,
+        "min": 36708.918202999936,
+        "max": 47413.50268199997,
+        "ci95_low": 29001.575277513504,
+        "ci95_high": 55720.10664048634,
+        "ci95_half_width": 13359.265681486415
+      },
+      "interactive.dispatch_lag_ms_p95": {
+        "samples": 3,
+        "mean": 0.8451238889695863,
+        "stdev": 0.04762507534868399,
+        "min": 0.8144046669258387,
+        "max": 0.8999853334898944,
+        "ci95_low": 0.7268070946065908,
+        "ci95_high": 0.9634406833325819,
+        "ci95_half_width": 0.11831679436299554
+      },
+      "interactive.e2e_ms_p50": {
+        "samples": 3,
+        "mean": 15948.941693333316,
+        "stdev": 5125.369408892361,
+        "min": 12066.738715999918,
+        "max": 21758.607076999993,
+        "ci95_low": 3215.7906390523603,
+        "ci95_high": 28682.09274761427,
+        "ci95_half_width": 12733.151054280956
+      },
+      "interactive.e2e_ms_p95": {
+        "samples": 3,
+        "mean": 42161.72947533329,
+        "stdev": 5646.959017233902,
+        "min": 36167.145323,
+        "max": 47380.92766400001,
+        "ci95_low": 28132.773427985238,
+        "ci95_high": 56190.68552268134,
+        "ci95_half_width": 14028.956047348054
+      },
+      "interactive.e2e_ms_p99": {
+        "samples": 3,
+        "mean": 46455.07196133333,
+        "stdev": 6226.758832412188,
+        "min": 39273.87752639992,
+        "max": 50354.47400839998,
+        "ci95_low": 30985.697079959267,
+        "ci95_high": 61924.44684270739,
+        "ci95_half_width": 15469.37488137406
+      },
+      "interactive.failed_requests": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "interactive.offered_slo_attainment": {
+        "samples": 3,
+        "mean": 0.23756906077348067,
+        "stdev": 0.05846964223347161,
+        "min": 0.1712707182320442,
+        "max": 0.281767955801105,
+        "ci95_low": 0.09231069454589333,
+        "ci95_high": 0.382827427001068,
+        "ci95_half_width": 0.14525836622758734
+      },
+      "interactive.scheduled_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 42361.3989810005,
+        "stdev": 5377.466884255822,
+        "min": 36709.50916300058,
+        "max": 47414.28264200053,
+        "ci95_low": 29001.952536452343,
+        "ci95_high": 55720.84542554866,
+        "ci95_half_width": 13359.446444548159
+      },
+      "interactive.slo_attainment": {
+        "samples": 3,
+        "mean": 0.23756906077348067,
+        "stdev": 0.05846964223347161,
+        "min": 0.1712707182320442,
+        "max": 0.281767955801105,
+        "ci95_low": 0.09231069454589333,
+        "ci95_high": 0.382827427001068,
+        "ci95_half_width": 0.14525836622758734
+      },
+      "interactive.tpot_ms_p50": {
+        "samples": 3,
+        "mean": 40.72052278835918,
+        "stdev": 2.020618027720923,
+        "min": 39.34447236507829,
+        "max": 43.04034490476203,
+        "ci95_low": 35.70062421766591,
+        "ci95_high": 45.740421359052455,
+        "ci95_half_width": 5.019898570693271
+      },
+      "interactive.tpot_ms_p95": {
+        "samples": 3,
+        "mean": 50.12340168253882,
+        "stdev": 6.16217064103201,
+        "min": 43.02424690476189,
+        "max": 54.089930015870486,
+        "ci95_low": 34.81448571281701,
+        "ci95_high": 65.43231765226062,
+        "ci95_half_width": 15.30891596972181
+      },
+      "interactive.tpot_ms_p99": {
+        "samples": 3,
+        "mean": 55.091988858200025,
+        "stdev": 6.19115903601473,
+        "min": 48.03258246666584,
+        "max": 59.59843985079166,
+        "ci95_low": 39.71105591122469,
+        "ci95_high": 70.47292180517536,
+        "ci95_half_width": 15.380932946975337
+      },
+      "interactive.ttft_ms_p50": {
+        "samples": 3,
+        "mean": 13185.083826000011,
+        "stdev": 4520.386189981425,
+        "min": 9736.937831999967,
+        "max": 18302.769677999975,
+        "ci95_low": 1954.9156978537085,
+        "ci95_high": 24415.25195414631,
+        "ci95_half_width": 11230.168128146302
+      },
+      "interactive.ttft_ms_p95": {
+        "samples": 3,
+        "mean": 39543.56959433333,
+        "stdev": 5658.221342262299,
+        "min": 33552.989464000006,
+        "max": 44797.217698999986,
+        "ci95_low": 25486.634122602674,
+        "ci95_high": 53600.50506606398,
+        "ci95_half_width": 14056.935471730652
+      },
+      "interactive.ttft_ms_p99": {
+        "samples": 3,
+        "mean": 44038.45746560002,
+        "stdev": 6174.259982987455,
+        "min": 36913.09944099995,
+        "max": 47809.5617726,
+        "ci95_low": 28699.507481744815,
+        "ci95_high": 59377.40744945522,
+        "ci95_half_width": 15338.949983855204
+      },
+      "kv.compression_dropped_blocks": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.compression_dropped_tokens": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.compression_events": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.forced_fallbacks": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.invalidated_tokens": {
+        "samples": 3,
+        "mean": 24134.0,
+        "stdev": 4484.975027801158,
+        "min": 20809.0,
+        "max": 29235.0,
+        "ci95_low": 12991.805175059255,
+        "ci95_high": 35276.19482494074,
+        "ci95_half_width": 11142.194824940745
+      },
+      "kv.preemptions": {
+        "samples": 3,
+        "mean": 17.333333333333332,
+        "stdev": 3.2145502536643185,
+        "min": 15.0,
+        "max": 21.0,
+        "ci95_low": 9.347303315580803,
+        "ci95_high": 25.319363351085862,
+        "ci95_half_width": 7.986030017752529
+      },
+      "kv.reclaim_events": {
+        "samples": 3,
+        "mean": 17.333333333333332,
+        "stdev": 3.2145502536643185,
+        "min": 15.0,
+        "max": 21.0,
+        "ci95_low": 9.347303315580803,
+        "ci95_high": 25.319363351085862,
+        "ci95_half_width": 7.986030017752529
+      },
+      "kv.reclaimed_blocks": {
+        "samples": 3,
+        "mean": 86.66666666666667,
+        "stdev": 16.072751268321593,
+        "min": 75.0,
+        "max": 105.0,
+        "ci95_low": 46.73651657790403,
+        "ci95_high": 126.59681675542932,
+        "ci95_half_width": 39.930150088762645
+      },
+      "kv.recomputed_tokens": {
+        "samples": 3,
+        "mean": 19696.666666666668,
+        "stdev": 3662.2023883632282,
+        "min": 16969.0,
+        "max": 23859.0,
+        "ci95_low": 10598.517346644301,
+        "ci95_high": 28794.815986689035,
+        "ci95_half_width": 9098.149320022367
+      },
+      "kv.retained_blocks": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "observability.summary_calls": {
+        "samples": 3,
+        "mean": 4622.666666666667,
+        "stdev": 15.947831618540915,
+        "min": 4605.0,
+        "max": 4636.0,
+        "ci95_low": 4583.046859236825,
+        "ci95_high": 4662.286474096509,
+        "ci95_half_width": 39.61980742984218
+      },
+      "observability.summary_compute_ms": {
+        "samples": 3,
+        "mean": 67.98679533315995,
+        "stdev": 0.5241910916651826,
+        "min": 67.58487099966715,
+        "max": 68.57969999975921,
+        "ci95_low": 66.68452737567361,
+        "ci95_high": 69.28906329064628,
+        "ci95_half_width": 1.3022679574863363
+      },
+      "observability.summary_refreshes": {
+        "samples": 3,
+        "mean": 297.0,
+        "stdev": 11.532562594670797,
+        "min": 288.0,
+        "max": 310.0,
+        "ci95_low": 268.3492141061832,
+        "ci95_high": 325.6507858938168,
+        "ci95_half_width": 28.65078589381683
+      },
+      "overall.failed_requests": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "overall.output_throughput_tokens_per_s": {
+        "samples": 3,
+        "mean": 187.86470688578189,
+        "stdev": 7.843005608925348,
+        "min": 182.49970168927084,
+        "max": 196.86585462462662,
+        "ci95_low": 168.38002838343738,
+        "ci95_high": 207.3493853881264,
+        "ci95_half_width": 19.484678502344522
+      },
+      "overall.request_throughput_rps": {
+        "samples": 3,
+        "mean": 1.9587326474632412,
+        "stdev": 0.08177348153945407,
+        "min": 1.902795526508398,
+        "max": 2.052581259227421,
+        "ci95_low": 1.7555796628471831,
+        "ci95_high": 2.161885632079299,
+        "ci95_half_width": 0.20315298461605796
+      },
+      "overall.slo_goodput_rps": {
+        "samples": 3,
+        "mean": 0.38996724796297594,
+        "stdev": 0.10515658449316832,
+        "min": 0.2688159885094967,
+        "max": 0.45759174369040395,
+        "ci95_low": 0.12872272724985623,
+        "ci95_high": 0.6512117686760956,
+        "ci95_half_width": 0.2612445207131197
+      },
+      "remote.backend_get_bytes": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.backend_put_bytes": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.kv_restored_tokens": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.restore_completed": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.restore_started": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.transfer_bytes": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      }
+    }
+  },
+  "candidate": {
+    "name": "Priority reserve 32",
+    "runs": 3,
+    "evidence_warnings": [
+      "Measurement lasted less than 300 seconds; not a sustained-load result.",
+      "batch: only 179 completions; tail percentiles are exploratory.",
+      "batch: only 180 completions; tail percentiles are exploratory.",
+      "interactive: only 181 completions; tail percentiles are exploratory."
+    ],
+    "configuration": {
+      "kv_admission_lookahead": 32,
+      "max_num_active_seqs": null,
+      "scheduler_trace_enabled": false,
+      "metrics_summary_mode": "cached",
+      "client_max_inflight": 512,
+      "model": "Qwen3-0.6B",
+      "backend": "CUDA",
+      "hardware": null,
+      "policy": "pals",
+      "prefix_cache_backend": "radix",
+      "kv_reclaim_policy": "recompute",
+      "kv_compression_policy": "none",
+      "kv_compression_sink_blocks": 1,
+      "kv_compression_recent_blocks": 2,
+      "kv_compression_importance_blocks": 2,
+      "kv_compression_query_tokens": 64,
+      "kv_compression_trigger_free_ratio": 1.0,
+      "num_kvcache_blocks": 64,
+      "num_kvcache_blocks_override": 64,
+      "max_num_seqs": 8,
+      "max_model_len": 8192,
+      "remote_kv_cost_aware": true,
+      "workload_fingerprint": "1a9a30a9bcb15c61",
+      "workload_label": "admission-sustained-3",
+      "interactive_delay_ms": 333.33333333333576,
+      "interactive_arrival_rate_rps": 2.9999999999999782,
+      "warmup_enabled": true,
+      "gpu_sampling_interval_ms": 200,
+      "requests": 361,
+      "workload_parameters": {
+        "seed": 20260907,
+        "arrival_rate_rps": 3.0,
+        "arrival_process": "uniform"
+      }
+    },
+    "metrics": {
+      "batch.client_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 69927.12894978329,
+        "stdev": 848.9833174978193,
+        "min": 69307.75213979995,
+        "max": 70894.88418179996,
+        "ci95_low": 67817.96725589468,
+        "ci95_high": 72036.2906436719,
+        "ci95_half_width": 2109.161693888615
+      },
+      "batch.dispatch_lag_ms_p95": {
+        "samples": 3,
+        "mean": 0.9274916391603936,
+        "stdev": 0.03443800874973542,
+        "min": 0.9018593166672417,
+        "max": 0.9666367669524333,
+        "ci95_low": 0.8419359782048654,
+        "ci95_high": 1.0130473001159217,
+        "ci95_half_width": 0.08555566095552809
+      },
+      "batch.e2e_ms_p50": {
+        "samples": 3,
+        "mean": 50079.07527266672,
+        "stdev": 2089.053129796915,
+        "min": 48752.26496800019,
+        "max": 52487.13620499996,
+        "ci95_low": 44889.160763095584,
+        "ci95_high": 55268.989782237855,
+        "ci95_half_width": 5189.914509571139
+      },
+      "batch.e2e_ms_p95": {
+        "samples": 3,
+        "mean": 69836.91436750002,
+        "stdev": 821.1718495480152,
+        "min": 69224.93914719998,
+        "max": 70770.14830390006,
+        "ci95_low": 67796.84576606865,
+        "ci95_high": 71876.98296893139,
+        "ci95_half_width": 2040.0686014313671
+      },
+      "batch.e2e_ms_p99": {
+        "samples": 3,
+        "mean": 81185.49976421332,
+        "stdev": 5417.324848479822,
+        "min": 74934.13832151999,
+        "max": 84505.52193394995,
+        "ci95_low": 67727.03265623751,
+        "ci95_high": 94643.96687218914,
+        "ci95_half_width": 13458.467107975812
+      },
+      "batch.failed_requests": {
+        "samples": 3,
+        "mean": 0.3333333333333333,
+        "stdev": 0.5773502691896257,
+        "min": 0.0,
+        "max": 1.0,
+        "ci95_low": -1.101,
+        "ci95_high": 1.7676666666666665,
+        "ci95_half_width": 1.4343333333333332
+      },
+      "batch.offered_slo_attainment": {
+        "samples": 3,
+        "mean": 0.14259259259259258,
+        "stdev": 0.008486251286955257,
+        "min": 0.13333333333333333,
+        "max": 0.15,
+        "ci95_low": 0.12150987427497974,
+        "ci95_high": 0.1636753109102054,
+        "ci95_half_width": 0.021082718317612836
+      },
+      "batch.scheduled_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 69927.68223981696,
+        "stdev": 848.8825662531967,
+        "min": 69308.25463471653,
+        "max": 70895.29701730055,
+        "ci95_low": 67818.77084609489,
+        "ci95_high": 72036.59363353903,
+        "ci95_half_width": 2108.911393722063
+      },
+      "batch.slo_attainment": {
+        "samples": 3,
+        "mean": 0.14286157666045934,
+        "stdev": 0.0085864937037327,
+        "min": 0.13333333333333333,
+        "max": 0.15,
+        "ci95_low": 0.12152982227675167,
+        "ci95_high": 0.164193331044167,
+        "ci95_half_width": 0.02133175438370767
+      },
+      "batch.tpot_ms_p50": {
+        "samples": 3,
+        "mean": 88.43980340551215,
+        "stdev": 2.5489688186745787,
+        "min": 85.87119675590564,
+        "max": 90.96866968504015,
+        "ci95_low": 82.10730277745506,
+        "ci95_high": 94.77230403356924,
+        "ci95_half_width": 6.332500628057094
+      },
+      "batch.tpot_ms_p95": {
+        "samples": 3,
+        "mean": 230.13546179448787,
+        "stdev": 23.976663023493476,
+        "min": 203.99758789527533,
+        "max": 251.1093991086613,
+        "ci95_low": 170.56932173713872,
+        "ci95_high": 289.701601851837,
+        "ci95_half_width": 59.56614005734914
+      },
+      "batch.tpot_ms_p99": {
+        "samples": 3,
+        "mean": 284.34106476364826,
+        "stdev": 9.61348918856669,
+        "min": 275.9208241540943,
+        "max": 294.81567510645726,
+        "ci95_low": 260.45790625719235,
+        "ci95_high": 308.2242232701042,
+        "ci95_half_width": 23.883158506455917
+      },
+      "batch.ttft_ms_p50": {
+        "samples": 3,
+        "mean": 34474.106161666656,
+        "stdev": 2831.120546616429,
+        "min": 32835.59917250002,
+        "max": 37743.199382499995,
+        "ci95_low": 27440.64521533928,
+        "ci95_high": 41507.56710799404,
+        "ci95_half_width": 7033.460946327377
+      },
+      "batch.ttft_ms_p95": {
+        "samples": 3,
+        "mean": 62370.56065079999,
+        "stdev": 980.1532822219239,
+        "min": 61708.015774299965,
+        "max": 63496.487838999994,
+        "ci95_low": 59935.52840176291,
+        "ci95_high": 64805.59289983707,
+        "ci95_half_width": 2435.0322490370827
+      },
+      "batch.ttft_ms_p99": {
+        "samples": 3,
+        "mean": 64127.9476636534,
+        "stdev": 1265.989079503963,
+        "min": 62672.67287764007,
+        "max": 64975.417532720094,
+        "ci95_low": 60982.80262212209,
+        "ci95_high": 67273.09270518471,
+        "ci95_half_width": 3145.145041531309
+      },
+      "cache.prefix_cache_block_hit_rate": {
+        "samples": 3,
+        "mean": 0.1924702808861288,
+        "stdev": 0.0014297589576136485,
+        "min": 0.1915016512010447,
+        "max": 0.1941124074909003,
+        "ci95_low": 0.18891827607903722,
+        "ci95_high": 0.1960222856932204,
+        "ci95_half_width": 0.0035520048070915937
+      },
+      "gpu.memory_used_mib.max": {
+        "samples": 3,
+        "mean": 5178.0,
+        "stdev": 81.01851640211638,
+        "min": 5096.0,
+        "max": 5258.0,
+        "ci95_low": 4976.722604120582,
+        "ci95_high": 5379.277395879418,
+        "ci95_half_width": 201.27739587941812
+      },
+      "gpu.memory_used_mib.mean": {
+        "samples": 3,
+        "mean": 4964.642376926643,
+        "stdev": 90.67299720035345,
+        "min": 4896.151965993624,
+        "max": 5067.468848996832,
+        "ci95_low": 4739.379985518644,
+        "ci95_high": 5189.904768334642,
+        "ci95_half_width": 225.26239140799885
+      },
+      "gpu.memory_used_mib.p95": {
+        "samples": 3,
+        "mean": 5105.516666666666,
+        "stdev": 39.9149199339459,
+        "min": 5060.0,
+        "max": 5134.549999999999,
+        "ci95_low": 5006.354505992613,
+        "ci95_high": 5204.67882734072,
+        "ci95_half_width": 99.16216067405357
+      },
+      "gpu.peak_memory_fraction": {
+        "samples": 3,
+        "mean": 0.6323888617489009,
+        "stdev": 0.009894787054484162,
+        "min": 0.6223742061553493,
+        "max": 0.6421592574499267,
+        "ci95_low": 0.6078068642062264,
+        "ci95_high": 0.6569708592915753,
+        "ci95_half_width": 0.0245819975426744
+      },
+      "gpu.utilization_gpu_percent.max": {
+        "samples": 3,
+        "mean": 100.0,
+        "stdev": 0.0,
+        "min": 100.0,
+        "max": 100.0,
+        "ci95_low": 100.0,
+        "ci95_high": 100.0,
+        "ci95_half_width": 0.0
+      },
+      "gpu.utilization_gpu_percent.mean": {
+        "samples": 3,
+        "mean": 36.349148499301265,
+        "stdev": 0.45667862570612905,
+        "min": 35.85052631578947,
+        "max": 36.747077577045694,
+        "ci95_low": 35.21460434053511,
+        "ci95_high": 37.48369265806742,
+        "ci95_half_width": 1.1345441587661562
+      },
+      "gpu.utilization_gpu_percent.p95": {
+        "samples": 3,
+        "mean": 55.666666666666664,
+        "stdev": 0.5773502691896257,
+        "min": 55.0,
+        "max": 56.0,
+        "ci95_low": 54.23233333333333,
+        "ci95_high": 57.101,
+        "ci95_half_width": 1.4343333333333332
+      },
+      "interactive.client_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 44727.18256666661,
+        "stdev": 3313.2396105845987,
+        "min": 40903.045940000025,
+        "max": 46736.92898699994,
+        "ci95_low": 36495.974808762214,
+        "ci95_high": 52958.39032457101,
+        "ci95_half_width": 8231.207757904402
+      },
+      "interactive.dispatch_lag_ms_p95": {
+        "samples": 3,
+        "mean": 0.8522807780195762,
+        "stdev": 0.07737283908331703,
+        "min": 0.763008667036047,
+        "max": 0.8999866670933443,
+        "ci95_low": 0.6600604775984678,
+        "ci95_high": 1.0445010784406847,
+        "ci95_half_width": 0.1922203004211085
+      },
+      "interactive.e2e_ms_p50": {
+        "samples": 3,
+        "mean": 16739.60374433337,
+        "stdev": 3616.232677454807,
+        "min": 12625.907988000108,
+        "max": 19417.152191000016,
+        "ci95_low": 7755.6587335463555,
+        "ci95_high": 25723.548755120384,
+        "ci95_half_width": 8983.945010787014
+      },
+      "interactive.e2e_ms_p95": {
+        "samples": 3,
+        "mean": 44347.989073333316,
+        "stdev": 3043.4880996467245,
+        "min": 40843.38206000001,
+        "max": 46326.38343400003,
+        "ci95_low": 36786.935300804726,
+        "ci95_high": 51909.042845861906,
+        "ci95_half_width": 7561.053772528593
+      },
+      "interactive.e2e_ms_p99": {
+        "samples": 3,
+        "mean": 48516.07443393333,
+        "stdev": 1757.3263966620204,
+        "min": 46611.48562879994,
+        "max": 50074.670887400025,
+        "ci95_low": 44150.28132221136,
+        "ci95_high": 52881.8675456553,
+        "ci95_half_width": 4365.793111721967
+      },
+      "interactive.failed_requests": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "interactive.offered_slo_attainment": {
+        "samples": 3,
+        "mean": 0.2965009208103131,
+        "stdev": 0.04183357897458764,
+        "min": 0.24861878453038674,
+        "max": 0.3259668508287293,
+        "ci95_low": 0.192572162172849,
+        "ci95_high": 0.4004296794477772,
+        "ci95_half_width": 0.1039287586374641
+      },
+      "interactive.scheduled_e2e_ms_p95": {
+        "samples": 3,
+        "mean": 44727.790620556014,
+        "stdev": 3313.1728322684125,
+        "min": 40903.72504700025,
+        "max": 46737.32255266714,
+        "ci95_low": 36496.748762574,
+        "ci95_high": 52958.832478538025,
+        "ci95_half_width": 8231.041857982014
+      },
+      "interactive.slo_attainment": {
+        "samples": 3,
+        "mean": 0.2965009208103131,
+        "stdev": 0.04183357897458764,
+        "min": 0.24861878453038674,
+        "max": 0.3259668508287293,
+        "ci95_low": 0.192572162172849,
+        "ci95_high": 0.4004296794477772,
+        "ci95_half_width": 0.1039287586374641
+      },
+      "interactive.tpot_ms_p50": {
+        "samples": 3,
+        "mean": 43.72122634920594,
+        "stdev": 0.06329475815622751,
+        "min": 43.677578031743934,
+        "max": 43.79381806349271,
+        "ci95_low": 43.563980763131866,
+        "ci95_high": 43.87847193528002,
+        "ci95_half_width": 0.1572455860740773
+      },
+      "interactive.tpot_ms_p95": {
+        "samples": 3,
+        "mean": 55.17396891534452,
+        "stdev": 2.4932748417118478,
+        "min": 52.41679614285686,
+        "max": 57.27013328571466,
+        "ci95_low": 48.97983096222939,
+        "ci95_high": 61.36810686845964,
+        "ci95_half_width": 6.194137953115123
+      },
+      "interactive.tpot_ms_p99": {
+        "samples": 3,
+        "mean": 71.15894419047635,
+        "stdev": 6.293455306948902,
+        "min": 64.49098740634932,
+        "max": 76.9951903428573,
+        "ci95_low": 55.52387270905029,
+        "ci95_high": 86.7940156719024,
+        "ci95_half_width": 15.635071481426058
+      },
+      "interactive.ttft_ms_p50": {
+        "samples": 3,
+        "mean": 13550.37164033331,
+        "stdev": 3748.251347028583,
+        "min": 9246.339117999923,
+        "max": 16097.186832000034,
+        "ci95_low": 4238.447604512199,
+        "ci95_high": 22862.29567615442,
+        "ci95_half_width": 9311.92403582111
+      },
+      "interactive.ttft_ms_p95": {
+        "samples": 3,
+        "mean": 41723.11465366664,
+        "stdev": 3102.4161013362896,
+        "min": 38154.110343000015,
+        "max": 43775.27673999998,
+        "ci95_low": 34015.66379500054,
+        "ci95_high": 49430.565512332745,
+        "ci95_half_width": 7707.4508586660995
+      },
+      "interactive.ttft_ms_p99": {
+        "samples": 3,
+        "mean": 45975.391079533256,
+        "stdev": 2044.407853146673,
+        "min": 43678.917529799895,
+        "max": 47597.18925119985,
+        "ci95_low": 40896.390536565465,
+        "ci95_high": 51054.39162250105,
+        "ci95_half_width": 5079.000542967794
+      },
+      "kv.compression_dropped_blocks": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.compression_dropped_tokens": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.compression_events": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.forced_fallbacks": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "kv.invalidated_tokens": {
+        "samples": 3,
+        "mean": 17419.0,
+        "stdev": 2011.7663880281925,
+        "min": 15227.0,
+        "max": 19181.0,
+        "ci95_low": 12421.091896001688,
+        "ci95_high": 22416.908103998314,
+        "ci95_half_width": 4997.908103998312
+      },
+      "kv.preemptions": {
+        "samples": 3,
+        "mean": 12.666666666666666,
+        "stdev": 1.5275252316519468,
+        "min": 11.0,
+        "max": 14.0,
+        "ci95_low": 8.871777369496355,
+        "ci95_high": 16.46155596383698,
+        "ci95_half_width": 3.7948892971703114
+      },
+      "kv.reclaim_events": {
+        "samples": 3,
+        "mean": 12.666666666666666,
+        "stdev": 1.5275252316519468,
+        "min": 11.0,
+        "max": 14.0,
+        "ci95_low": 8.871777369496355,
+        "ci95_high": 16.46155596383698,
+        "ci95_half_width": 3.7948892971703114
+      },
+      "kv.reclaimed_blocks": {
+        "samples": 3,
+        "mean": 63.333333333333336,
+        "stdev": 7.637626158259733,
+        "min": 55.0,
+        "max": 70.0,
+        "ci95_low": 44.35888684748178,
+        "ci95_high": 82.3077798191849,
+        "ci95_half_width": 18.97444648585156
+      },
+      "kv.recomputed_tokens": {
+        "samples": 3,
+        "mean": 14176.333333333334,
+        "stdev": 1620.7237066611117,
+        "min": 12411.0,
+        "max": 15597.0,
+        "ci95_low": 10149.907503740322,
+        "ci95_high": 18202.759162926348,
+        "ci95_half_width": 4026.4258295930126
+      },
+      "kv.retained_blocks": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "observability.summary_calls": {
+        "samples": 3,
+        "mean": 4662.333333333333,
+        "stdev": 51.9839718887787,
+        "min": 4622.0,
+        "max": 4721.0,
+        "ci95_low": 4533.187565749653,
+        "ci95_high": 4791.479100917013,
+        "ci95_half_width": 129.14576758367957
+      },
+      "observability.summary_compute_ms": {
+        "samples": 3,
+        "mean": 67.85025000023855,
+        "stdev": 3.2013777062697324,
+        "min": 65.69272999990972,
+        "max": 71.52855800040925,
+        "ci95_low": 59.89694504527933,
+        "ci95_high": 75.80355495519775,
+        "ci95_half_width": 7.953304954959213
+      },
+      "observability.summary_refreshes": {
+        "samples": 3,
+        "mean": 298.3333333333333,
+        "stdev": 11.930353445448855,
+        "min": 290.0,
+        "max": 312.0,
+        "ci95_low": 268.6943004300073,
+        "ci95_high": 327.97236623665935,
+        "ci95_half_width": 29.639032903326058
+      },
+      "overall.failed_requests": {
+        "samples": 3,
+        "mean": 0.3333333333333333,
+        "stdev": 0.5773502691896257,
+        "min": 0.0,
+        "max": 1.0,
+        "ci95_low": -1.101,
+        "ci95_high": 1.7676666666666665,
+        "ci95_half_width": 1.4343333333333332
+      },
+      "overall.output_throughput_tokens_per_s": {
+        "samples": 3,
+        "mean": 181.68225130051314,
+        "stdev": 1.050838982730225,
+        "min": 181.03337181057327,
+        "max": 182.89465451504532,
+        "ci95_low": 179.0716118649212,
+        "ci95_high": 184.29289073610508,
+        "ci95_half_width": 2.6106394355919287
+      },
+      "overall.request_throughput_rps": {
+        "samples": 3,
+        "mean": 1.8948580859527067,
+        "stdev": 0.010523753524772542,
+        "min": 1.8875071402384747,
+        "max": 1.9069134207466312,
+        "ci95_low": 1.868713522976141,
+        "ci95_high": 1.9210026489292724,
+        "ci95_half_width": 0.02614456297656585
+      },
+      "overall.slo_goodput_rps": {
+        "samples": 3,
+        "mean": 0.41692342617074557,
+        "stdev": 0.0486472447874344,
+        "min": 0.36077006281566415,
+        "max": 0.44628628953946164,
+        "ci95_low": 0.29606721721568235,
+        "ci95_high": 0.5377796351258088,
+        "ci95_half_width": 0.12085620895506323
+      },
+      "remote.backend_get_bytes": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.backend_put_bytes": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.kv_restored_tokens": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.restore_completed": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.restore_started": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      },
+      "remote.transfer_bytes": {
+        "samples": 3,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "ci95_low": 0.0,
+        "ci95_high": 0.0,
+        "ci95_half_width": 0.0
+      }
+    }
+  },
+  "metrics": {
+    "batch.client_e2e_ms_p95": {
+      "baseline_mean": 63480.29609236663,
+      "candidate_mean": 69927.12894978329,
+      "change_percent": 10.155643962397768
+    },
+    "batch.dispatch_lag_ms_p95": {
+      "baseline_mean": 0.8738559726126025,
+      "candidate_mean": 0.9274916391603936,
+      "change_percent": 6.13781540995072
+    },
+    "batch.e2e_ms_p50": {
+      "baseline_mean": 45394.70681600002,
+      "candidate_mean": 50079.07527266672,
+      "change_percent": 10.319195309827679
+    },
+    "batch.e2e_ms_p95": {
+      "baseline_mean": 63440.88033865005,
+      "candidate_mean": 69836.91436750002,
+      "change_percent": 10.081880949172957
+    },
+    "batch.e2e_ms_p99": {
+      "baseline_mean": 75221.38370595998,
+      "candidate_mean": 81185.49976421332,
+      "change_percent": 7.928750794544075
+    },
+    "batch.failed_requests": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.3333333333333333,
+      "change_percent": null
+    },
+    "batch.offered_slo_attainment": {
+      "baseline_mean": 0.15925925925925927,
+      "candidate_mean": 0.14259259259259258,
+      "change_percent": -10.465116279069782
+    },
+    "batch.scheduled_e2e_ms_p95": {
+      "baseline_mean": 63480.78791891719,
+      "candidate_mean": 69927.68223981696,
+      "change_percent": 10.155662102263555
+    },
+    "batch.slo_attainment": {
+      "baseline_mean": 0.15925925925925927,
+      "candidate_mean": 0.14286157666045934,
+      "change_percent": -10.296219306223207
+    },
+    "batch.tpot_ms_p50": {
+      "baseline_mean": 86.27916327559065,
+      "candidate_mean": 88.43980340551215,
+      "change_percent": 2.5042432586185885
+    },
+    "batch.tpot_ms_p95": {
+      "baseline_mean": 241.51879861706016,
+      "candidate_mean": 230.13546179448787,
+      "change_percent": -4.713230145128837
+    },
+    "batch.tpot_ms_p99": {
+      "baseline_mean": 281.7822324047769,
+      "candidate_mean": 284.34106476364826,
+      "change_percent": 0.9080886104967888
+    },
+    "batch.ttft_ms_p50": {
+      "baseline_mean": 29120.721035499962,
+      "candidate_mean": 34474.106161666656,
+      "change_percent": 18.383422304827498
+    },
+    "batch.ttft_ms_p95": {
+      "baseline_mean": 56129.50912484995,
+      "candidate_mean": 62370.56065079999,
+      "change_percent": 11.119020321499601
+    },
+    "batch.ttft_ms_p99": {
+      "baseline_mean": 57374.69658187998,
+      "candidate_mean": 64127.9476636534,
+      "change_percent": 11.770434501794345
+    },
+    "cache.prefix_cache_block_hit_rate": {
+      "baseline_mean": 0.18570700236526788,
+      "candidate_mean": 0.1924702808861288,
+      "change_percent": 3.641908185862696
+    },
+    "gpu.memory_used_mib.max": {
+      "baseline_mean": 5155.0,
+      "candidate_mean": 5178.0,
+      "change_percent": 0.44616876818622697
+    },
+    "gpu.memory_used_mib.mean": {
+      "baseline_mean": 4952.813753073772,
+      "candidate_mean": 4964.642376926643,
+      "change_percent": 0.23882634079526668
+    },
+    "gpu.memory_used_mib.p95": {
+      "baseline_mean": 5100.0,
+      "candidate_mean": 5105.516666666666,
+      "change_percent": 0.10816993464051812
+    },
+    "gpu.peak_memory_fraction": {
+      "baseline_mean": 0.629579872984856,
+      "candidate_mean": 0.6323888617489009,
+      "change_percent": 0.44616876818621914
+    },
+    "gpu.utilization_gpu_percent.max": {
+      "baseline_mean": 100.0,
+      "candidate_mean": 100.0,
+      "change_percent": 0.0
+    },
+    "gpu.utilization_gpu_percent.mean": {
+      "baseline_mean": 36.62397474654252,
+      "candidate_mean": 36.349148499301265,
+      "change_percent": -0.7503998382021674
+    },
+    "gpu.utilization_gpu_percent.p95": {
+      "baseline_mean": 56.749999999999964,
+      "candidate_mean": 55.666666666666664,
+      "change_percent": -1.9089574155652878
+    },
+    "interactive.client_e2e_ms_p95": {
+      "baseline_mean": 42360.84095899992,
+      "candidate_mean": 44727.18256666661,
+      "change_percent": 5.586153518427593
+    },
+    "interactive.dispatch_lag_ms_p95": {
+      "baseline_mean": 0.8451238889695863,
+      "candidate_mean": 0.8522807780195762,
+      "change_percent": 0.8468449588753084
+    },
+    "interactive.e2e_ms_p50": {
+      "baseline_mean": 15948.941693333316,
+      "candidate_mean": 16739.60374433337,
+      "change_percent": 4.957457781230412
+    },
+    "interactive.e2e_ms_p95": {
+      "baseline_mean": 42161.72947533329,
+      "candidate_mean": 44347.989073333316,
+      "change_percent": 5.185412517954456
+    },
+    "interactive.e2e_ms_p99": {
+      "baseline_mean": 46455.07196133333,
+      "candidate_mean": 48516.07443393333,
+      "change_percent": 4.436549951564968
+    },
+    "interactive.failed_requests": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "interactive.offered_slo_attainment": {
+      "baseline_mean": 0.23756906077348067,
+      "candidate_mean": 0.2965009208103131,
+      "change_percent": 24.806201550387602
+    },
+    "interactive.scheduled_e2e_ms_p95": {
+      "baseline_mean": 42361.3989810005,
+      "candidate_mean": 44727.790620556014,
+      "change_percent": 5.586198039910965
+    },
+    "interactive.slo_attainment": {
+      "baseline_mean": 0.23756906077348067,
+      "candidate_mean": 0.2965009208103131,
+      "change_percent": 24.806201550387602
+    },
+    "interactive.tpot_ms_p50": {
+      "baseline_mean": 40.72052278835918,
+      "candidate_mean": 43.72122634920594,
+      "change_percent": 7.3690202270796314
+    },
+    "interactive.tpot_ms_p95": {
+      "baseline_mean": 50.12340168253882,
+      "candidate_mean": 55.17396891534452,
+      "change_percent": 10.076265902290372
+    },
+    "interactive.tpot_ms_p99": {
+      "baseline_mean": 55.091988858200025,
+      "candidate_mean": 71.15894419047635,
+      "change_percent": 29.163868767981278
+    },
+    "interactive.ttft_ms_p50": {
+      "baseline_mean": 13185.083826000011,
+      "candidate_mean": 13550.37164033331,
+      "change_percent": 2.770462586009333
+    },
+    "interactive.ttft_ms_p95": {
+      "baseline_mean": 39543.56959433333,
+      "candidate_mean": 41723.11465366664,
+      "change_percent": 5.511755973708677
+    },
+    "interactive.ttft_ms_p99": {
+      "baseline_mean": 44038.45746560002,
+      "candidate_mean": 45975.391079533256,
+      "change_percent": 4.398277608715619
+    },
+    "kv.compression_dropped_blocks": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "kv.compression_dropped_tokens": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "kv.compression_events": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "kv.forced_fallbacks": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "kv.invalidated_tokens": {
+      "baseline_mean": 24134.0,
+      "candidate_mean": 17419.0,
+      "change_percent": -27.82381702162924
+    },
+    "kv.preemptions": {
+      "baseline_mean": 17.333333333333332,
+      "candidate_mean": 12.666666666666666,
+      "change_percent": -26.923076923076923
+    },
+    "kv.reclaim_events": {
+      "baseline_mean": 17.333333333333332,
+      "candidate_mean": 12.666666666666666,
+      "change_percent": -26.923076923076923
+    },
+    "kv.reclaimed_blocks": {
+      "baseline_mean": 86.66666666666667,
+      "candidate_mean": 63.333333333333336,
+      "change_percent": -26.923076923076923
+    },
+    "kv.recomputed_tokens": {
+      "baseline_mean": 19696.666666666668,
+      "candidate_mean": 14176.333333333334,
+      "change_percent": -28.02673887290574
+    },
+    "kv.retained_blocks": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "observability.summary_calls": {
+      "baseline_mean": 4622.666666666667,
+      "candidate_mean": 4662.333333333333,
+      "change_percent": 0.8580905682145815
+    },
+    "observability.summary_compute_ms": {
+      "baseline_mean": 67.98679533315995,
+      "candidate_mean": 67.85025000023855,
+      "change_percent": -0.20084096073697688
+    },
+    "observability.summary_refreshes": {
+      "baseline_mean": 297.0,
+      "candidate_mean": 298.3333333333333,
+      "change_percent": 0.4489337822671092
+    },
+    "overall.failed_requests": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.3333333333333333,
+      "change_percent": null
+    },
+    "overall.output_throughput_tokens_per_s": {
+      "baseline_mean": 187.86470688578189,
+      "candidate_mean": 181.68225130051314,
+      "change_percent": -3.290908488217297
+    },
+    "overall.request_throughput_rps": {
+      "baseline_mean": 1.9587326474632412,
+      "candidate_mean": 1.8948580859527067,
+      "change_percent": -3.261014799199808
+    },
+    "overall.slo_goodput_rps": {
+      "baseline_mean": 0.38996724796297594,
+      "candidate_mean": 0.41692342617074557,
+      "change_percent": 6.912421068327484
+    },
+    "remote.backend_get_bytes": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "remote.backend_put_bytes": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "remote.kv_restored_tokens": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "remote.restore_completed": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "remote.restore_started": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    },
+    "remote.transfer_bytes": {
+      "baseline_mean": 0.0,
+      "candidate_mean": 0.0,
+      "change_percent": null
+    }
+  }
+}
